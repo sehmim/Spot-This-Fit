@@ -1,0 +1,25 @@
+import express from "express";
+import cors from "cors";
+import path from "path";
+import { errorHandler } from "./middleware/error-handler";
+import { requestLogger } from "./middleware/request-logger";
+import { routes } from "./routes/index";
+
+const app = express();
+
+app.use(
+  cors({
+    origin: ["http://localhost:3000"],
+    exposedHeaders: ["Content-Range", "Accept-Ranges", "Content-Length"],
+  })
+);
+app.use(express.json({ limit: "50mb" }));
+app.use(requestLogger);
+
+// Serve static video files
+app.use("/videos", express.static(path.resolve(__dirname, "../../videos")));
+
+app.use("/api", routes);
+app.use(errorHandler);
+
+export { app };
