@@ -156,12 +156,12 @@ const frameSearchSessions = new Map<string, FrameSearchSession>();
 export async function createFrameSearch(req: Request, res: Response) {
   const body = req.body as FrameSearchRequest;
 
-  if (!body.frameImage) {
+  if (!body.frameImage && !body.videoUrl) {
     const error: ApiError = {
       success: false,
       error: {
         code: "INVALID_REQUEST",
-        message: "Frame image is required",
+        message: "Frame image or video URL is required",
       },
       timestamp: new Date().toISOString(),
     };
@@ -210,9 +210,11 @@ export async function streamSearchResults(req: Request, res: Response) {
     process.env.OPENAI_API_KEY &&
     process.env.OPENAI_API_KEY !== "your-api-key-here";
 
+  const hasFrameImage = !!session.request.frameImage;
+
   let identifiedProducts: Product[];
 
-  if (hasApiKey) {
+  if (hasApiKey && hasFrameImage) {
     // Step 1: AI analysis
     const aiStatus: SSEEvent = {
       type: "status",

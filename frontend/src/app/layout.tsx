@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LocaleProvider } from "@/components/i18n/locale-provider";
@@ -48,6 +49,7 @@ export default async function RootLayout({
           <TooltipProvider>
             <Header />
             <main className="min-h-[calc(100dvh-64px)]">{children}</main>
+            <Footer />
             <Toaster position="top-center" richColors />
           </TooltipProvider>
         </LocaleProvider>
