@@ -4,7 +4,7 @@ import { useEffect, useMemo, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchStore } from "@/stores/search-store";
 import { useResultsStore } from "@/stores/results-store";
-import { X } from "lucide-react";
+import { X, ImageIcon } from "lucide-react";
 import { useProductStream } from "@/hooks/use-product-stream";
 import { SearchStatus } from "@/components/results/search-status";
 import { StreamingProductGrid } from "@/components/results/streaming-product-grid";
@@ -118,32 +118,44 @@ export default function ResultsPage() {
       />
 
       {/* Source image preview thumbnail */}
-      {sourceImage && !previewDismissed && (
+      {sourceImage && (
         <div className="fixed bottom-4 right-4 z-40">
-          <div
-            className="relative overflow-hidden rounded-lg border bg-card shadow-lg transition-all duration-200"
-            style={{ width: previewExpanded ? 200 : 100, height: previewExpanded ? 400 : 200 }}
-          >
+          {previewDismissed ? (
+            /* Collapsed bubble to reopen */
             <button
               type="button"
-              className="block h-full w-full"
-              onClick={() => setPreviewExpanded((v) => !v)}
+              onClick={() => setPreviewDismissed(false)}
+              className="flex size-10 items-center justify-center rounded-full border bg-card shadow-lg transition-transform hover:scale-110"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={sourceImage}
-                alt="Source"
-                className="h-full w-full object-cover"
-              />
+              <ImageIcon className="size-4 text-muted-foreground" />
             </button>
-            <button
-              type="button"
-              onClick={() => setPreviewDismissed(true)}
-              className="absolute top-1 right-1 rounded-full bg-black/60 p-0.5 text-white transition-colors hover:bg-black/80"
+          ) : (
+            /* Expanded preview */
+            <div
+              className="relative overflow-hidden rounded-lg border bg-card shadow-lg transition-all duration-200"
+              style={{ width: previewExpanded ? 200 : 100, height: previewExpanded ? 400 : 200 }}
             >
-              <X className="size-3" />
-            </button>
-          </div>
+              <button
+                type="button"
+                className="block h-full w-full"
+                onClick={() => setPreviewExpanded((v) => !v)}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={sourceImage}
+                  alt="Source"
+                  className="h-full w-full object-cover"
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewDismissed(true)}
+                className="absolute top-1 right-1 rounded-full bg-black/60 p-0.5 text-white transition-colors hover:bg-black/80"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </PageTransition>
