@@ -18,14 +18,14 @@ interface PlatformLogosProps {
 export function PlatformLogos({ title, labels }: PlatformLogosProps) {
   return (
     <section className="flex flex-col items-center gap-3">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+      <p className="text-xs font-medium uppercase tracking-widest text-white/50">
         {title}
       </p>
       <div className="flex items-center gap-6">
         {platforms.map((p) => (
           <div
             key={p.key}
-            className="flex flex-col items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            className="flex flex-col items-center gap-1 text-white/60 transition-colors hover:text-white"
           >
             <p.icon className="size-6" style={{ color: p.color }} />
             <span className="text-[10px] font-medium">{labels[p.key]}</span>

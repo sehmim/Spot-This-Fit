@@ -3,7 +3,6 @@ import { DemoVideo } from "@/components/landing/demo-video";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { PlatformLogos } from "@/components/landing/platform-logos";
 import { CtaInput } from "@/components/landing/cta-input";
-import { Separator } from "@/components/ui/separator";
 import { createTranslator } from "@/lib/i18n";
 import { getLocaleFromCookies } from "@/lib/i18n-server";
 
@@ -44,44 +43,86 @@ export default async function LandingPage() {
   ];
 
   return (
-    <div className="flex flex-col items-center gap-12 px-4 py-10 sm:px-6 md:px-8 lg:py-16">
-      <HeroSection
-        titleLine1={t("landing.hero.titleLine1")}
-        titleLine2={t("landing.hero.titleLine2")}
-        subheading={t("landing.hero.subheading")}
-        subtitle={t("landing.hero.subtitle")}
-      />
-      <CtaInput />
-      <DemoVideo label={t("landing.demo.label")} />
-      <Separator className="max-w-md" />
-      <HowItWorks title={t("landing.howItWorks.title")} steps={steps} />
-      <section className="w-full max-w-3xl rounded-2xl border bg-muted/20 p-6 text-left">
-        <h2 className="text-lg font-semibold sm:text-xl">
-          {t("landing.problem.title")}
-        </h2>
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-          {problemItems.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </section>
-      <section className="w-full max-w-3xl rounded-2xl border bg-background p-6 text-left">
-        <h2 className="text-lg font-semibold sm:text-xl">
-          {t("landing.useCases.title")}
-        </h2>
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-          {useCases.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </section>
-      <PlatformLogos
-        title={t("landing.platforms.title")}
-        labels={platformLabels}
-      />
-      <p className="max-w-3xl text-center text-sm text-muted-foreground">
-        {t("landing.keywords")}
-      </p>
+    <div className="flex flex-col">
+      {/* Block 1: Hero + CTA */}
+      <div
+        className="flex min-h-[calc(100dvh-64px)] flex-col items-center px-4 sm:px-6 md:px-8"
+        style={{ backgroundColor: "#F7E7CE" }}
+      >
+        <div className="flex flex-1 flex-col items-center justify-center gap-6">
+          <HeroSection
+            titleLine1={t("landing.hero.titleLine1")}
+            titleLine2={t("landing.hero.titleLine2")}
+            subheadingLine1={t("landing.hero.subheadingLine1")}
+            subheadingLine2={t("landing.hero.subheadingLine2")}
+          />
+          <CtaInput />
+        </div>
+        <p className="mb-8 w-full px-4 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:text-xs sm:tracking-widest">
+          {t("landing.hero.subtitle")}
+        </p>
+      </div>
+
+      {/* Block 2: How It Works */}
+      <div
+        className="flex min-h-dvh flex-col items-center justify-center px-4 py-12 sm:px-6 md:px-8 text-white"
+        style={{ backgroundColor: "#1A1A2E" }}
+      >
+        <HowItWorks title={t("landing.howItWorks.title")} subtitle={t("landing.howItWorks.subtitle")} steps={steps} />
+      </div>
+
+      {/* Block 3: Demo Video */}
+      <div
+        className="flex min-h-dvh flex-col items-center justify-center px-4 py-10 sm:px-6 md:px-8 text-[#1A1A2E]"
+        style={{ backgroundColor: "#C5B358" }}
+      >
+        <DemoVideo
+          label={t("landing.demo.label")}
+          title={t("landing.demo.title")}
+          subtitle={t("landing.demo.subtitle")}
+        />
+      </div>
+
+      {/* Block 4: Style Obsessions */}
+      <div
+        className="flex min-h-dvh flex-col items-center justify-center px-4 py-12 sm:px-6 md:px-8 text-white"
+        style={{ backgroundColor: "#722F37" }}
+      >
+        <section className="w-full max-w-3xl rounded-2xl border border-white/10 bg-white/10 p-6 text-left backdrop-blur-sm">
+          <h2 className="text-lg font-semibold uppercase sm:text-xl">
+            {t("landing.problem.title")}
+          </h2>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/70">
+            {problemItems.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+      </div>
+
+      {/* Block 5: Built for Style Hunters + Platforms */}
+      <div
+        className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-12 sm:px-6 md:px-8 text-white"
+        style={{ backgroundColor: "#16213E" }}
+      >
+        <section className="w-full max-w-3xl rounded-2xl border border-white/10 bg-white/10 p-6 text-left backdrop-blur-sm">
+          <h2 className="text-lg font-semibold uppercase sm:text-xl">
+            {t("landing.useCases.title")}
+          </h2>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/70">
+            {useCases.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+        <PlatformLogos
+          title={t("landing.platforms.title")}
+          labels={platformLabels}
+        />
+        <p className="max-w-3xl text-center text-xs text-white/30">
+          {t("landing.keywords")}
+        </p>
+      </div>
     </div>
   );
 }
