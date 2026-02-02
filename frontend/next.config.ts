@@ -11,7 +11,10 @@ const nextConfig: NextConfig = {
     ],
   },
   rewrites: async () => {
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
+    let backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
+    if (backendUrl && !/^https?:\/\//.test(backendUrl)) {
+      backendUrl = `https://${backendUrl}`;
+    }
     return [
       {
         source: "/api/:path*",

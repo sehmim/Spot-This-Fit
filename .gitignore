@@ -13,3 +13,4 @@ dist/
 /videos
 
 .promptvc/
+.env*.local
