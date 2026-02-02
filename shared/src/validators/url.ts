@@ -1,5 +1,5 @@
-import type { Platform, VideoUrl } from "../types/video";
-import { URL_PATTERNS } from "../constants/platforms";
+import type { Platform, VideoUrl } from "../types/video.js";
+import { URL_PATTERNS } from "../constants/platforms.js";
 
 export function validateVideoUrl(raw: string): VideoUrl {
   const trimmed = raw.trim();

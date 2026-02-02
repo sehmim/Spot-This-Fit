@@ -7,14 +7,14 @@ export type {
   HighlightRegion,
   VideoDownloadRequest,
   VideoDownloadResponse,
-} from "./types/video";
+} from "./types/video.js";
 
 export type {
   ConfidenceLevel,
   ProductCategory,
   Product,
   ProductMatch,
-} from "./types/product";
+} from "./types/product.js";
 
 export type {
   SearchStatus,
@@ -28,18 +28,18 @@ export type {
   SSECompleteEvent,
   SSEErrorEvent,
   SSEEvent,
-} from "./types/search";
+} from "./types/search.js";
 
 export type {
   EmailCaptureRequest,
   EmailCaptureResponse,
-} from "./types/user";
+} from "./types/user.js";
 
-export type { ApiResponse, ApiError, ApiResult } from "./types/api";
+export type { ApiResponse, ApiError, ApiResult } from "./types/api.js";
 
 // Constants
-export { SUPPORTED_PLATFORMS, URL_PATTERNS } from "./constants/platforms";
-export { STATUS_MESSAGES, CONFIDENCE_THRESHOLDS } from "./constants/processing";
+export { SUPPORTED_PLATFORMS, URL_PATTERNS } from "./constants/platforms.js";
+export { STATUS_MESSAGES, CONFIDENCE_THRESHOLDS } from "./constants/processing.js";
 
 // Validators
-export { validateVideoUrl, extractPlatform } from "./validators/url";
+export { validateVideoUrl, extractPlatform } from "./validators/url.js";

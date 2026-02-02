@@ -1,4 +1,4 @@
-import type { Platform } from "../types/video";
+import type { Platform } from "../types/video.js";
 
 export const SUPPORTED_PLATFORMS: Record<
   Platform,

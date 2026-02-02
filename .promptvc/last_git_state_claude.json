@@ -1,11 +1,18 @@
 {
-  ".promptvc/last_git_state_claude.json": "86137d66acb0b7d36bc2141c268319a909c529e9",
-  ".promptvc/last_prompt_count_claude": "b5045cc4046dbc1d7cafa4c603fd3cdf35dc5dde",
-  ".promptvc/sessions.json": "70bec3e85d97c939d1355b77597b7d58e11d9c47",
-  "backend/src/app.ts": "4b2eec6f814e486e31ba4c5c887d73b473f58758",
-  "backend/tsconfig.json": "84d5e9f60e54d808fadb25d9b9fda7f528a145ad",
-  "frontend/next.config.ts": "9c47596fec961de35bd20f03acea14f606aad318",
-  "frontend/src/hooks/use-product-stream.ts": "9d3b267d87685b3e55b683ac2036ba41602b03b5",
-  "frontend/src/lib/api-client.ts": "fab399e39f87c39bf3b02287426d59ee5309520c",
-  "shared/package.json": "94e4bd26a394ef491c53171709d1f71f75c557f3"
+  ".promptvc/last_git_state_claude.json": "f6f6dd4d54cdf9e61864230db60222ff7fde0030",
+  ".promptvc/last_prompt_count_claude": "e440e5c842586965a7fb77deda2eca68612b1f53",
+  ".promptvc/last_session_file_claude": "b97f7fdf2840857b87505ae0d85ce3bcaf454aa7",
+  ".promptvc/sessions.json": "09f2e9eacd1dbaa096258f4019149e9b61e77363",
+  "backend/package.json": "17f8696b9036595ef5427635ee6143290385bfc0",
+  "backend/src/app.ts": "15f97ff050f4d1e21e737773de43f7a5d19eaefa",
+  "backend/tsconfig.json": "6b758038c2563907f1d5384a37d923cee733f61b",
+  "frontend/.gitignore": "e3a7542e062e6088092fc56bb344b6555634857a",
+  "frontend/next.config.ts": "a27237545f7d7c853ef7364c77edca4fde61d76d",
+  "shared/package.json": "d8ed53fb8e2d74ce4103256540b5c088c28cc591",
+  "shared/src/constants/platforms.ts": "86c85ff79754894bf400f70aaaac7f8ab3a8983b",
+  "shared/src/constants/processing.ts": "067e7ddae066cb5e339c0170b66ba9dd6145931c",
+  "shared/src/index.ts": "fbb3b7569225ae0acefd5ed09af1a39e066d4703",
+  "shared/src/types/search.ts": "2f65d63a508797955f83695b9340ce0086de0b14",
+  "shared/src/validators/url.ts": "7e40b9af7070cf5b2c2cdfa364b669bc53dacee6",
+  "shared/tsconfig.json": "8e92e859fb7653da96a0158c0fda79a59e337115"
 }

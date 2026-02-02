@@ -1,5 +1,5 @@
-import type { TimeRange, VideoUrl, HighlightRegion } from "./video";
-import type { ProductMatch, Product } from "./product";
+import type { TimeRange, VideoUrl, HighlightRegion } from "./video.js";
+import type { ProductMatch, Product } from "./product.js";
 
 export type SearchStatus =
   | "validating"

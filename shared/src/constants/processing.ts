@@ -1,4 +1,4 @@
-import type { SearchStatus } from "../types/search";
+import type { SearchStatus } from "../types/search.js";
 
 export const STATUS_MESSAGES: Record<SearchStatus, string> = {
   validating: "Validating video URL...",
