@@ -73,8 +73,8 @@ export default async function LandingPage() {
 
       {/* Block 3: Demo Video */}
       <div
-        className="flex min-h-dvh flex-col items-center justify-center px-4 py-10 sm:px-6 md:px-8 text-[#1A1A2E]"
-        style={{ backgroundColor: "#C5B358" }}
+        className="flex min-h-dvh flex-col items-center justify-center px-4 py-10 sm:px-6 md:px-8 text-[#1A1A2E] mt-12"
+        style={{ backgroundColor: "white" }}
       >
         <DemoVideo
           label={t("landing.demo.label")}
@@ -83,45 +83,40 @@ export default async function LandingPage() {
         />
       </div>
 
-      {/* Block 4: Style Obsessions */}
+      {/* Block 4: Style Obsessions + Use Cases + Platforms */}
       <div
-        className="flex min-h-dvh flex-col items-center justify-center px-4 py-12 sm:px-6 md:px-8 text-white"
-        style={{ backgroundColor: "#722F37" }}
+        className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-12 sm:px-6 md:px-8"
+        style={{ backgroundColor: "#F7E7CE" }}
       >
-        <section className="w-full max-w-3xl rounded-2xl border border-white/10 bg-white/10 p-6 text-left backdrop-blur-sm">
+        <section className="w-full max-w-3xl rounded-2xl border border-black/10 bg-white/70 p-6 text-left">
           <h2 className="text-lg font-semibold uppercase sm:text-xl">
             {t("landing.problem.title")}
           </h2>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/70">
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
             {problemItems.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
         </section>
-      </div>
-
-      {/* Block 5: Built for Style Hunters + Platforms */}
-      <div
-        className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-12 sm:px-6 md:px-8 text-white"
-        style={{ backgroundColor: "#16213E" }}
-      >
-        <section className="w-full max-w-3xl rounded-2xl border border-white/10 bg-white/10 p-6 text-left backdrop-blur-sm">
+        <section className="w-full max-w-3xl rounded-2xl border border-black/10 bg-white/70 p-6 text-left">
           <h2 className="text-lg font-semibold uppercase sm:text-xl">
             {t("landing.useCases.title")}
           </h2>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/70">
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
             {useCases.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
         </section>
-        <PlatformLogos
-          title={t("landing.platforms.title")}
-          labels={platformLabels}
-        />
-        <p className="max-w-3xl text-center text-xs text-white/30">
-          {t("landing.keywords")}
-        </p>
+        <section className="w-full max-w-3xl rounded-2xl border border-black/10 bg-white/70 p-6 text-left">
+          <PlatformLogos
+            title={t("landing.platforms.title")}
+            labels={platformLabels}
+          />
+          <p className="mt-4 text-xs text-muted-foreground">
+            {t("landing.keywords")}
+          </p>
+        </section>
       </div>
     </div>
   );

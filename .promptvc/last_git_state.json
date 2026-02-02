@@ -1,15 +1,14 @@
 {
-  ".gitignore": "6d53e6db17aa6445c23575a862f10ff8bbbecba2",
-  ".promptvc/last_git_state_claude.json": "74130c7576a313bac24aec980bb1f80a91bc1bad",
+  ".promptvc/last_git_state_claude.json": "b8129833eee6f92d63aaae205ab3ab14e4dae257",
   ".promptvc/last_prompt_count": "c227083464fb9af8955c90d2924774ee50abb547",
-  ".promptvc/last_prompt_count_claude": "bf0d87ab1b2b0ec1a11a3973d2845b42413d9767",
-  ".promptvc/last_session_file": "abfc62c850ffb26f59648f950e45969fc6c215cc",
-  ".promptvc/last_session_file_claude": "66c17badccef8d5de869f47b10f3f2db57ec0d4d",
-  ".promptvc/sessions.json": "f0ef2d87dded699d0c260709b0c09a39bbb848f3",
-  "frontend/src/app/page.tsx": "dfbfb1f6061d774fd0df1d98ae0cb560a0b01e65",
-  "frontend/src/components/landing/cta-input.tsx": "bfeb90bb66dadb3c256428d530c072046089473e",
-  "frontend/src/components/landing/demo-video.tsx": "8c35c4ff67706b0f2eec8ac68eb0056e3a7c4c72",
-  "frontend/src/components/layout/header.tsx": "086d72d999203259cb755a80740cff848fd508dc",
-  "frontend/src/locales/en.json": "23990feec0afdcfdbcc4502620b0d0d8faccb97b",
-  "frontend/src/locales/fr.json": "d94cea7364ad0f0664838a1c9d7c24b3403451d6"
+  ".promptvc/last_prompt_count_claude": "da2d3988d7d1a255376770b1e87394ebb42febb3",
+  ".promptvc/last_session_file": "ebcad613867b11348484eaeca3182623e1700f74",
+  ".promptvc/last_session_file_claude": "b97f7fdf2840857b87505ae0d85ce3bcaf454aa7",
+  ".promptvc/sessions.json": "fd2cae0acd1818eff7cdb6e3959c9f10d9aeba94",
+  "frontend/src/app/page.tsx": "5856f47501b694c9864450fac177d0ea721a23af",
+  "frontend/src/components/landing/demo-video.tsx": "ba7f172c056b1ef6a9676f0a87c62c37df9067b9",
+  "frontend/src/components/landing/platform-logos.tsx": "b79f0f4c4205062711cea4fe248c489d03cdf70c",
+  "frontend/src/components/layout/footer.tsx": "d0283a62561974eeb1105cc8bef0cb465cd361d1",
+  "frontend/src/locales/en.json": "1e1637088ba355085f0df777795eefb9b596c85b",
+  "frontend/src/locales/fr.json": "995c9fc07f8f5cd2468c5f0e32d427c856d90f7b"
 }
