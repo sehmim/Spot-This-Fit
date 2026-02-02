@@ -13,7 +13,7 @@ export function CtaInput() {
     <section className="flex w-full max-w-lg flex-col items-center gap-3">
       <Button
         size="lg"
-        className="h-12 min-w-[180px] gap-2 text-base"
+        className="h-12 min-w-[180px] gap-2 text-base cursor-pointer"
         onClick={() => router.push("/search")}
       >
         {t("landing.cta.button")}

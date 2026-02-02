@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { useSearchStore } from "@/stores/search-store";
 import { useResultsStore } from "@/stores/results-store";
 import { apiClient } from "@/lib/api-client";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageTransition } from "@/components/layout/page-transition";
-import { Loader2, ImagePlus, X, Link2 } from "lucide-react";
+import { Loader2, ImagePlus, X, Link2, Clock } from "lucide-react";
 import type { ApiResponse } from "@spotthisfit/shared";
 import { useTranslations } from "@/components/i18n/locale-provider";
 import { getErrorMessage } from "@/lib/error-messages";
@@ -25,11 +26,6 @@ export default function SearchPage() {
   const [uploadFileName, setUploadFileName] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-
-  // Video URL state
-  const [videoUrl, setVideoUrl] = useState("");
-  const [isVideoSearching, setIsVideoSearching] = useState(false);
-  const [videoError, setVideoError] = useState<string | null>(null);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -51,27 +47,6 @@ export default function SearchPage() {
     setUploadError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
-
-  const handleVideoSearch = async () => {
-    if (!videoUrl.trim()) return;
-    setIsVideoSearching(true);
-    setVideoError(null);
-    resetStream();
-
-    try {
-      const res = await apiClient.post<ApiResponse<{ searchId: string }>>(
-        "/api/search/frame",
-        { frameImage: "", videoUrl: videoUrl.trim() }
-      );
-      setSearchId(res.data.searchId);
-      router.push("/results");
-    } catch (err) {
-      setVideoError(
-        getErrorMessage(err, t, { fallbackKey: "search.upload.error" })
-      );
-      setIsVideoSearching(false);
-    }
-  };
 
   const handleImageSearch = async () => {
     if (!uploadedImage) return;
@@ -108,7 +83,7 @@ export default function SearchPage() {
         {/* Image upload */}
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-foreground">
+            <label className="text-sm font-medium text-foreground cursor-pointer">
               {t("search.upload.label")}
             </label>
             <p className="text-xs text-muted-foreground">
@@ -128,7 +103,7 @@ export default function SearchPage() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex flex-col items-center gap-3 rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 transition-colors hover:border-muted-foreground/50 hover:bg-muted/30"
+              className="cursor-pointer flex flex-col items-center gap-3 rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 transition-colors hover:border-muted-foreground/50 hover:bg-muted/30"
             >
               <ImagePlus className="size-8 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">
@@ -194,49 +169,30 @@ export default function SearchPage() {
           <div className="h-px flex-1 bg-border" />
         </div>
 
-        {/* Video URL search */}
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-foreground">
+        {/* Video URL — disabled / Coming Soon */}
+        <div className="relative flex flex-col gap-4 rounded-lg border bg-muted/10 p-4 opacity-50">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-muted-foreground">
               {t("search.form.videoUrlLabel")}
             </label>
+            <Badge variant="outline" className="gap-1 text-xs">
+              <Clock className="size-3" />
+              {t("search.video.comingSoon")}
+            </Badge>
           </div>
           <div className="relative">
-            <input
-              type="url"
-              value={videoUrl}
-              onChange={(e) => {
-                setVideoUrl(e.target.value);
-                setVideoError(null);
-              }}
-              placeholder={t("search.form.placeholder")}
-              className="flex h-11 w-full items-center rounded-md border bg-background pl-10 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+            <div className="flex h-11 w-full items-center rounded-md border bg-background/50 pl-10 text-sm text-muted-foreground">
+              {t("search.form.placeholder")}
+            </div>
             <Link2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           </div>
-
-          {videoError && (
-            <p className="text-sm text-destructive">{videoError}</p>
-          )}
-
           <Button
             type="button"
             size="lg"
-            className="h-12 w-full gap-2 text-base"
-            disabled={!videoUrl.trim() || isVideoSearching}
-            onClick={handleVideoSearch}
+            className="h-12 w-full text-base"
+            disabled
           >
-            {isVideoSearching ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                {t("search.upload.analyzing")}
-              </>
-            ) : (
-              <>
-                <Link2 className="size-4" />
-                {t("search.form.next")}
-              </>
-            )}
+            {t("search.form.next")}
           </Button>
         </div>
       </div>
