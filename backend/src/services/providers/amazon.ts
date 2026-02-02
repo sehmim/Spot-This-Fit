@@ -1,5 +1,5 @@
 import type { Product, ProductCategory } from "@spotthisfit/shared";
-import type { ProductProvider } from "./types";
+import type { ProductProvider } from "./types.js";
 
 const AMAZON_ASSOCIATE_TAG =
   process.env.AMAZON_ASSOCIATE_TAG ?? "checkthisfit-20";

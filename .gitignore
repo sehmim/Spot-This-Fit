@@ -11,3 +11,5 @@ dist/
 
 ./backend/.env
 /videos
+
+.promptvc/

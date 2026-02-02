@@ -1,6 +1,6 @@
-import type { ProductProvider } from "./providers/types";
-import { AffiliateComProvider } from "./providers/affiliate-com";
-import { AmazonProvider } from "./providers/amazon";
+import type { ProductProvider } from "./providers/types.js";
+import { AffiliateComProvider } from "./providers/affiliate-com.js";
+import { AmazonProvider } from "./providers/amazon.js";
 
 type ProviderName = "affiliate_com" | "amazon";
 

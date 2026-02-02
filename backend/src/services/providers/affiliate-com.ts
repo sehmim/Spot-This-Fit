@@ -5,7 +5,7 @@ import type {
   AffiliateComRequestBody,
   AffiliateComResponse,
   AffiliateComProduct,
-} from "./types";
+} from "./types.js";
 
 // ── Config ─────────────────────────────────────────────────────────
 

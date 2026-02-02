@@ -12,10 +12,10 @@ import type {
   Product,
 } from "@spotthisfit/shared";
 import { validateVideoUrl, STATUS_MESSAGES } from "@spotthisfit/shared";
-import { buildMockResults } from "../mock-data/search-results";
-import { MOCK_PRODUCTS } from "../mock-data/products";
-import { analyzeFrame } from "../services/vision";
-import { getProductProvider } from "../services/product-enrichment";
+import { buildMockResults } from "../mock-data/search-results.js";
+import { MOCK_PRODUCTS } from "../mock-data/products.js";
+import { analyzeFrame } from "../services/vision.js";
+import { getProductProvider } from "../services/product-enrichment.js";
 
 interface SearchSession {
   request: SearchRequest;

@@ -5,7 +5,7 @@ import {
   getSearchResults,
   createFrameSearch,
   streamSearchResults,
-} from "../controllers/search.controller";
+} from "../controllers/search.controller.js";
 
 const router = Router();
 

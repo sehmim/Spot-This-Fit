@@ -1,9 +1,9 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
-import { errorHandler } from "./middleware/error-handler";
-import { requestLogger } from "./middleware/request-logger";
-import { routes } from "./routes/index";
+import { errorHandler } from "./middleware/error-handler.js";
+import { requestLogger } from "./middleware/request-logger.js";
+import { routes } from "./routes/index.js";
 
 const app = express();
 

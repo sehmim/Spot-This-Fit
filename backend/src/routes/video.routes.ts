@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { validateVideo, getVideoMeta } from "../controllers/video.controller";
+import { validateVideo, getVideoMeta } from "../controllers/video.controller.js";
 
 const router = Router();
 

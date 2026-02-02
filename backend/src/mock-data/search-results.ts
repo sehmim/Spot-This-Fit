@@ -1,5 +1,5 @@
 import type { ProductMatch } from "@spotthisfit/shared";
-import { MOCK_PRODUCTS } from "./products";
+import { MOCK_PRODUCTS } from "./products.js";
 
 export function buildMockResults(timeRangeCount: number): ProductMatch {
   // Return a subset of products as "requested" matches and rest as "suggestions"

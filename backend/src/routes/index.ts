@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { videoRoutes } from "./video.routes";
-import { searchRoutes } from "./search.routes";
-import { userRoutes } from "./user.routes";
-import { downloadRoutes } from "./download.routes";
+import { videoRoutes } from "./video.routes.js";
+import { searchRoutes } from "./search.routes.js";
+import { userRoutes } from "./user.routes.js";
+import { downloadRoutes } from "./download.routes.js";
 
 const router = Router();
 

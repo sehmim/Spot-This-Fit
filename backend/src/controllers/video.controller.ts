@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { validateVideoUrl } from "@spotthisfit/shared";
 import type { ApiResponse, ApiError, VideoUrl, VideoMeta } from "@spotthisfit/shared";
-import { MOCK_VIDEO_META } from "../mock-data/video-meta";
+import { MOCK_VIDEO_META } from "../mock-data/video-meta.js";
 
 export async function validateVideo(req: Request, res: Response) {
   const { url } = req.body as { url: string };
