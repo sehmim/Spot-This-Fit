@@ -1,3 +1,9 @@
 {
-  "frontend/src/app/results/page.tsx": "a96f9dcd8b913baf8843763dfb9027198671674b"
+  ".promptvc/last_git_state_claude.json": "299883e2fc2639b38c444b2093cd87d9a8edce3f",
+  ".promptvc/last_prompt_count_claude": "dec2bf5d6199c7cd0d84f3dc1e76a73ccc336302",
+  ".promptvc/sessions.json": "5c0d0c38793410bafd1de1997782e391d2290c21",
+  "frontend/src/app/search/page.tsx": "de9c4ee0b66ab44ad89865e09efea2f8db5cccff",
+  "frontend/src/components/landing/cta-input.tsx": "dc51884aeb516de0e50302cbbbf23bbf241c0a00",
+  "frontend/src/locales/en.json": "df706a12f517c00b41bb808e77159af6c16e5881",
+  "frontend/src/locales/fr.json": "74421a0ef870c569d82dfee11484501264f897f9"
 }
