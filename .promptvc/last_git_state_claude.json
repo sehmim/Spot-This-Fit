@@ -1,9 +1,11 @@
 {
-  ".promptvc/last_git_state_claude.json": "299883e2fc2639b38c444b2093cd87d9a8edce3f",
-  ".promptvc/last_prompt_count_claude": "dec2bf5d6199c7cd0d84f3dc1e76a73ccc336302",
-  ".promptvc/sessions.json": "5c0d0c38793410bafd1de1997782e391d2290c21",
-  "frontend/src/app/search/page.tsx": "de9c4ee0b66ab44ad89865e09efea2f8db5cccff",
-  "frontend/src/components/landing/cta-input.tsx": "dc51884aeb516de0e50302cbbbf23bbf241c0a00",
-  "frontend/src/locales/en.json": "df706a12f517c00b41bb808e77159af6c16e5881",
-  "frontend/src/locales/fr.json": "74421a0ef870c569d82dfee11484501264f897f9"
+  ".promptvc/last_git_state_claude.json": "86137d66acb0b7d36bc2141c268319a909c529e9",
+  ".promptvc/last_prompt_count_claude": "b5045cc4046dbc1d7cafa4c603fd3cdf35dc5dde",
+  ".promptvc/sessions.json": "70bec3e85d97c939d1355b77597b7d58e11d9c47",
+  "backend/src/app.ts": "4b2eec6f814e486e31ba4c5c887d73b473f58758",
+  "backend/tsconfig.json": "84d5e9f60e54d808fadb25d9b9fda7f528a145ad",
+  "frontend/next.config.ts": "9c47596fec961de35bd20f03acea14f606aad318",
+  "frontend/src/hooks/use-product-stream.ts": "9d3b267d87685b3e55b683ac2036ba41602b03b5",
+  "frontend/src/lib/api-client.ts": "fab399e39f87c39bf3b02287426d59ee5309520c",
+  "shared/package.json": "94e4bd26a394ef491c53171709d1f71f75c557f3"
 }

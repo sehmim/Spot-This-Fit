@@ -6,7 +6,7 @@ import type { SSEEvent, Product } from "@spotthisfit/shared";
 import { useTranslations } from "@/components/i18n/locale-provider";
 import type { TranslationKey } from "@/lib/i18n";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_BASE = "";
 
 type Translator = (
   key: TranslationKey,

@@ -7,9 +7,13 @@ import { routes } from "./routes/index";
 
 const app = express();
 
+const corsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+  : ["http://localhost:3000"];
+
 app.use(
   cors({
-    origin: ["http://localhost:3000"],
+    origin: corsOrigins,
     exposedHeaders: ["Content-Range", "Accept-Ranges", "Content-Length"],
   })
 );
