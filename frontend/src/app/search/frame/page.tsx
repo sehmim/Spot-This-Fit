@@ -7,8 +7,10 @@ import { VideoFrameSelector } from "@/components/search/video-frame-selector";
 import { PageTransition } from "@/components/layout/page-transition";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslations } from "@/components/i18n/locale-provider";
 
 export default function FramePage() {
+  const t = useTranslations();
   const router = useRouter();
   const downloadedVideoUrl = useSearchStore((s) => s.downloadedVideoUrl);
   const setSelectedFrame = useSearchStore((s) => s.setSelectedFrame);
@@ -34,9 +36,9 @@ export default function FramePage() {
             <ArrowLeft className="size-4" />
           </Button>
           <div>
-            <h1 className="text-xl font-bold">Select a frame</h1>
+            <h1 className="text-xl font-bold">{t("frame.title")}</h1>
             <p className="text-sm text-muted-foreground">
-              Play the video and pause on the product you want to find
+              {t("frame.subtitle")}
             </p>
           </div>
         </div>

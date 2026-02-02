@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Search, CheckCircle2 } from "lucide-react";
+import { useTranslations } from "@/components/i18n/locale-provider";
 
 interface SearchStatusProps {
   status: string;
@@ -16,6 +17,16 @@ export function SearchStatus({
   retailersSearched,
   streamComplete,
 }: SearchStatusProps) {
+  const t = useTranslations();
+  const retailersLabel =
+    retailersSearched === 1
+      ? t("results.searchStatus.retailersChecked_one", {
+          count: retailersSearched,
+        })
+      : t("results.searchStatus.retailersChecked_other", {
+          count: retailersSearched,
+        });
+
   return (
     <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
       {streamComplete ? (
@@ -39,7 +50,7 @@ export function SearchStatus({
       </AnimatePresence>
       {isStreaming && retailersSearched > 0 && (
         <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
-          {retailersSearched} retailers checked
+          {retailersLabel}
         </span>
       )}
     </div>

@@ -27,12 +27,14 @@ export interface Product {
   matchedTimeRange?: string;
   description?: string;
 
-  // Affiliate fields
+  // Affiliate / provider fields
   affiliateUrl?: string;
-  amazonAsin?: string;
-  amazonRating?: number;
-  amazonReviewCount?: number;
-  amazonPrime?: boolean;
+  onSale?: boolean;
+  saleDiscount?: number;
+  merchantName?: string;
+  merchantLogo?: string;
+  size?: string;
+  availability?: string;
 
   // AI identification
   isHighlighted?: boolean;

@@ -7,8 +7,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useEmailCapture } from "@/hooks/use-email-capture";
 import { useUiStore } from "@/stores/ui-store";
 import { Mail, Loader2, X, CheckCircle2 } from "lucide-react";
+import { useTranslations } from "@/components/i18n/locale-provider";
 
 export function EmailCaptureInline() {
+  const t = useTranslations();
   const { submitEmail, isSubmitting, error } = useEmailCapture();
   const emailSubmitted = useUiStore((s) => s.emailSubmitted);
   const [email, setEmail] = useState("");
@@ -22,7 +24,7 @@ export function EmailCaptureInline() {
         <CardContent className="flex items-center gap-3 p-4">
           <CheckCircle2 className="size-5 text-green-600 dark:text-green-400" />
           <p className="text-sm font-medium text-green-800 dark:text-green-200">
-            Results will be sent to your email!
+            {t("results.emailCapture.success")}
           </p>
         </CardContent>
       </Card>
@@ -41,9 +43,11 @@ export function EmailCaptureInline() {
           <div className="flex items-center gap-2">
             <Mail className="size-5 text-primary" />
             <div>
-              <p className="text-sm font-semibold">Get results by email</p>
+              <p className="text-sm font-semibold">
+                {t("results.emailCapture.title")}
+              </p>
               <p className="text-xs text-muted-foreground">
-                Save your results and get price drop alerts
+                {t("results.emailCapture.subtitle")}
               </p>
             </div>
           </div>
@@ -58,7 +62,7 @@ export function EmailCaptureInline() {
         <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
           <Input
             type="email"
-            placeholder="you@example.com"
+            placeholder={t("results.emailCapture.placeholder")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="h-9 text-sm"
@@ -72,7 +76,7 @@ export function EmailCaptureInline() {
             {isSubmitting ? (
               <Loader2 className="size-3.5 animate-spin" />
             ) : (
-              "Save"
+              t("results.emailCapture.save")
             )}
           </Button>
         </form>

@@ -1,5 +1,21 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+export class ApiClientError extends Error {
+  code?: string;
+  status?: number;
+
+  constructor(message: string, options?: { code?: string; status?: number }) {
+    super(message);
+    this.name = "ApiClientError";
+    this.code = options?.code;
+    this.status = options?.status;
+  }
+}
+
+export function isApiClientError(error: unknown): error is ApiClientError {
+  return error instanceof ApiClientError;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -14,7 +30,10 @@ class ApiClient {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
-      throw new Error(body?.error?.message ?? `Request failed: ${res.status}`);
+      throw new ApiClientError(body?.error?.message ?? "", {
+        code: body?.error?.code,
+        status: res.status,
+      });
     }
     return res.json();
   }
@@ -27,7 +46,10 @@ class ApiClient {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      throw new Error(data?.error?.message ?? `Request failed: ${res.status}`);
+      throw new ApiClientError(data?.error?.message ?? "", {
+        code: data?.error?.code,
+        status: res.status,
+      });
     }
     return res.json();
   }

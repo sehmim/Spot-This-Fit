@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import type { HighlightRegion } from "@spotthisfit/shared";
+import { useTranslations } from "@/components/i18n/locale-provider";
 
 interface FrameHighlighterProps {
   frameImage: string;
@@ -19,6 +20,7 @@ export function FrameHighlighter({
   highlight,
   onHighlightChange,
 }: FrameHighlighterProps) {
+  const t = useTranslations();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -178,7 +180,7 @@ export function FrameHighlighter({
       <img
         ref={imageRef}
         src={frameImage}
-        alt="Selected video frame"
+        alt={t("frameHighlighter.imageAlt")}
         className="w-full rounded-xl"
         onLoad={handleImageLoad}
         draggable={false}
@@ -203,7 +205,7 @@ export function FrameHighlighter({
       {!highlight && !currentRect && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="rounded-lg bg-black/60 px-4 py-2 text-sm font-medium text-white">
-            Draw a box around the product
+            {t("frameHighlighter.overlay")}
           </div>
         </div>
       )}

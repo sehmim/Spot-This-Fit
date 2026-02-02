@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useSearchStore } from "@/stores/search-store";
+import { useTranslations } from "@/components/i18n/locale-provider";
 
 export function CtaInput() {
+  const t = useTranslations();
   const [url, setUrl] = useState("");
   const router = useRouter();
   const setInputUrl = useSearchStore((s) => s.setInputUrl);
@@ -24,7 +26,7 @@ export function CtaInput() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
         <Input
           type="url"
-          placeholder="Paste a video link..."
+          placeholder={t("landing.cta.placeholder")}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           className="h-12 flex-1 text-base"
@@ -35,12 +37,12 @@ export function CtaInput() {
           className="h-12 min-w-[140px] gap-2"
           disabled={!url.trim()}
         >
-          Find Products
+          {t("landing.cta.button")}
           <ArrowRight className="size-4" />
         </Button>
       </form>
       <p className="mt-3 text-center text-xs text-muted-foreground">
-        Supports Instagram Reels, TikTok, YouTube Shorts &amp; Facebook Reels
+        {t("landing.cta.supporting")}
       </p>
     </section>
   );

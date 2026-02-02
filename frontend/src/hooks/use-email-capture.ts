@@ -5,8 +5,11 @@ import { apiClient } from "@/lib/api-client";
 import { useSearchStore } from "@/stores/search-store";
 import { useUiStore } from "@/stores/ui-store";
 import type { ApiResponse, EmailCaptureResponse } from "@spotthisfit/shared";
+import { useTranslations } from "@/components/i18n/locale-provider";
+import { getErrorMessage } from "@/lib/error-messages";
 
 export function useEmailCapture() {
+  const t = useTranslations();
   const searchId = useSearchStore((s) => s.searchId);
   const { setEmailSubmitted, setEmailSheetOpen } = useUiStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,12 +27,16 @@ export function useEmailCapture() {
         setEmailSubmitted(true);
         setEmailSheetOpen(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save email");
+        setError(
+          getErrorMessage(err, t, {
+            fallbackKey: "results.emailCapture.errorFailed",
+          })
+        );
       } finally {
         setIsSubmitting(false);
       }
     },
-    [searchId, setEmailSubmitted, setEmailSheetOpen]
+    [searchId, setEmailSubmitted, setEmailSheetOpen, t]
   );
 
   return { submitEmail, isSubmitting, error };

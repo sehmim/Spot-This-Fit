@@ -1,6 +1,9 @@
+"use client";
+
 import { Badge } from "@/components/ui/badge";
 import type { ConfidenceLevel } from "@spotthisfit/shared";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "@/components/i18n/locale-provider";
 
 const styles: Record<ConfidenceLevel, string> = {
   high: "bg-green-100 text-green-800 border-green-200",
@@ -15,9 +18,10 @@ export function ConfidenceBadge({
   level: ConfidenceLevel;
   score: number;
 }) {
+  const t = useTranslations();
   return (
     <Badge variant="outline" className={cn("text-[10px]", styles[level])}>
-      {score}% match
+      {t("results.confidenceMatch", { score })}
     </Badge>
   );
 }

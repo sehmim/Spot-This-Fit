@@ -4,76 +4,79 @@ import useEmblaCarousel from "embla-carousel-react";
 import { useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, ExternalLink, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { getCurrencyLocale } from "@/lib/i18n";
+import { useLocale, useTranslations } from "@/components/i18n/locale-provider";
+import { useResultsStore } from "@/stores/results-store";
 import type { Product } from "@spotthisfit/shared";
 
 // Compact card for the carousel — smaller than the main ProductCard
 function CompactProductCard({ product }: { product: Product }) {
-  const isAmazon = product.retailer === "Amazon.ca";
+  const { locale } = useLocale();
+  const t = useTranslations();
+  const setSelectedProduct = useResultsStore((s) => s.setSelectedProduct);
+  const formatter = new Intl.NumberFormat(
+    getCurrencyLocale(locale, product.currency),
+    {
+      style: "currency",
+      currency: product.currency,
+    },
+  );
+  const priceLabel =
+    product.price > 0
+      ? formatter.format(product.price)
+      : t("results.priceUnavailable");
+  const originalLabel =
+    product.originalPrice && product.originalPrice > product.price
+      ? formatter.format(product.originalPrice)
+      : null;
 
   return (
-    <Card className="h-full overflow-hidden">
-      <div className="relative aspect-square w-full bg-muted">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={product.imageUrl}
-          alt={product.name}
-          className="h-full w-full object-cover"
-        />
-        {product.amazonPrime && (
-          <div className="absolute bottom-1.5 left-1.5">
-            <span className="inline-flex items-center rounded bg-[#232F3E] px-1 py-0.5 text-[9px] font-bold leading-tight text-white">
-              prime
-            </span>
-          </div>
-        )}
-      </div>
-      <CardContent className="flex flex-col gap-1 p-2.5">
-        <p className="truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          {product.brand}
-        </p>
-        <h4 className="line-clamp-2 text-xs font-semibold leading-tight">
-          {product.name}
-        </h4>
-        <div className="flex items-center gap-1.5">
-          {product.price > 0 && (
-            <span className="text-sm font-bold">
-              ${product.price.toFixed(2)}
-            </span>
-          )}
-          {product.originalPrice && product.originalPrice > product.price && (
-            <span className="text-[10px] text-muted-foreground line-through">
-              ${product.originalPrice.toFixed(2)}
-            </span>
-          )}
+    <button
+      type="button"
+      className="block h-full w-full text-left"
+      onClick={() => setSelectedProduct(product)}
+    >
+      <Card className="group h-full overflow-hidden border-muted/60 bg-card/50 shadow-none transition-colors cursor-pointer hover:border-foreground/20">
+        <div className="relative aspect-square w-full bg-muted/50">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={product.imageUrl}
+            alt={product.name}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          />
         </div>
-        {product.amazonRating != null && (
-          <div className="flex items-center gap-1">
-            <Star className="size-2.5 fill-amber-400 text-amber-400" />
-            <span className="text-[10px] text-muted-foreground">
-              {product.amazonRating.toFixed(1)}
+        <CardContent className="flex flex-col gap-1.5 p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
+              {product.brand}
+            </p>
+            <span className="truncate text-[10px] text-muted-foreground">
+              {product.retailer}
             </span>
           </div>
-        )}
-        {(product.affiliateUrl || (product.shopUrl !== "#" && isAmazon)) && (
-          <Button
-            asChild
-            size="sm"
-            className="mt-1 h-7 w-full gap-1 bg-[#FF9900] text-[10px] text-black hover:bg-[#e88b00]"
-          >
-            <a
-              href={product.affiliateUrl ?? product.shopUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+          <h4 className="line-clamp-2 text-xs font-semibold leading-tight">
+            {product.name}
+          </h4>
+          <div className="flex items-baseline justify-between gap-2">
+            <span
+              className={cn(
+                "text-sm font-semibold",
+                product.price <= 0 && "text-muted-foreground",
+              )}
             >
-              Amazon.ca
-              <ExternalLink className="size-2.5" />
-            </a>
-          </Button>
-        )}
-      </CardContent>
-    </Card>
+              {priceLabel}
+            </span>
+            {originalLabel && (
+              <span className="text-[10px] text-muted-foreground line-through">
+                {originalLabel}
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </button>
   );
 }
 
@@ -84,6 +87,7 @@ interface OtherProductsCarouselProps {
 export function OtherProductsCarousel({
   products,
 }: OtherProductsCarouselProps) {
+  const t = useTranslations();
   const [emblaRef, emblaApi] = useEmblaCarousel({
     align: "start",
     slidesToScroll: 1,
@@ -92,6 +96,10 @@ export function OtherProductsCarousel({
 
   const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
   const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+  const countLabel =
+    products.length === 1
+      ? t("results.otherProducts.count_one", { count: products.length })
+      : t("results.otherProducts.count_other", { count: products.length });
 
   if (products.length === 0) return null;
 
@@ -100,12 +108,9 @@ export function OtherProductsCarousel({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">
-            Other products in this video
+            {t("results.otherProducts.title")}
           </h2>
-          <p className="text-xs text-muted-foreground">
-            {products.length} more item{products.length !== 1 ? "s" : ""}{" "}
-            spotted
-          </p>
+          <p className="text-xs text-muted-foreground">{countLabel}</p>
         </div>
         <div className="flex gap-1">
           <Button

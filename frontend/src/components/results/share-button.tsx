@@ -3,14 +3,17 @@
 import { Button } from "@/components/ui/button";
 import { Share2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "@/components/i18n/locale-provider";
 
 export function ShareButton() {
+  const t = useTranslations();
+
   const handleShare = async () => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "SpotThisFit - Products I found",
-          text: "Check out these products I found from a video!",
+          title: t("results.share.title"),
+          text: t("results.share.text"),
           url: window.location.href,
         });
       } catch {
@@ -18,14 +21,14 @@ export function ShareButton() {
       }
     } else {
       await navigator.clipboard.writeText(window.location.href);
-      toast.success("Link copied to clipboard!");
+      toast.success(t("results.share.toast"));
     }
   };
 
   return (
     <Button variant="outline" className="gap-2" onClick={handleShare}>
       <Share2 className="size-4" />
-      Share
+      {t("results.share.label")}
     </Button>
   );
 }

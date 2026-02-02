@@ -11,8 +11,11 @@ import { PageTransition } from "@/components/layout/page-transition";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import type { ApiResponse } from "@spotthisfit/shared";
+import { useTranslations } from "@/components/i18n/locale-provider";
+import { getErrorMessage } from "@/lib/error-messages";
 
 export default function HighlightPage() {
+  const t = useTranslations();
   const router = useRouter();
   const selectedFrame = useSearchStore((s) => s.selectedFrame);
   const inputUrl = useSearchStore((s) => s.inputUrl);
@@ -54,7 +57,11 @@ export default function HighlightPage() {
       setSearchId(res.data.searchId);
       router.push("/results");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start search");
+      setError(
+        getErrorMessage(err, t, {
+          fallbackKey: "highlight.error.startSearchFailed",
+        })
+      );
       setIsSubmitting(false);
     }
   };
@@ -67,9 +74,9 @@ export default function HighlightPage() {
             <ArrowLeft className="size-4" />
           </Button>
           <div>
-            <h1 className="text-xl font-bold">Highlight the product</h1>
+            <h1 className="text-xl font-bold">{t("highlight.title")}</h1>
             <p className="text-sm text-muted-foreground">
-              Draw a box around the product and describe it
+              {t("highlight.subtitle")}
             </p>
           </div>
         </div>
@@ -82,7 +89,7 @@ export default function HighlightPage() {
 
         {highlight && (
           <p className="text-xs text-muted-foreground">
-            Product area selected. You can redraw if needed.
+            {t("highlight.selectedNote")}
           </p>
         )}
 
@@ -104,7 +111,7 @@ export default function HighlightPage() {
           ) : (
             <Sparkles className="size-4" />
           )}
-          Find this product
+          {t("highlight.submit")}
         </Button>
       </div>
     </PageTransition>

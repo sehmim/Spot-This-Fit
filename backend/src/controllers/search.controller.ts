@@ -15,7 +15,7 @@ import { validateVideoUrl, STATUS_MESSAGES } from "@spotthisfit/shared";
 import { buildMockResults } from "../mock-data/search-results";
 import { MOCK_PRODUCTS } from "../mock-data/products";
 import { analyzeFrame } from "../services/vision";
-import { searchAmazon, enrichWithAmazon } from "../services/amazon";
+import { getProductProvider } from "../services/product-enrichment";
 
 interface SearchSession {
   request: SearchRequest;
@@ -156,12 +156,12 @@ const frameSearchSessions = new Map<string, FrameSearchSession>();
 export async function createFrameSearch(req: Request, res: Response) {
   const body = req.body as FrameSearchRequest;
 
-  if (!body.frameImage || !body.highlight || !body.description) {
+  if (!body.frameImage) {
     const error: ApiError = {
       success: false,
       error: {
         code: "INVALID_REQUEST",
-        message: "Frame image, highlight region, and description are required",
+        message: "Frame image is required",
       },
       timestamp: new Date().toISOString(),
     };
@@ -217,6 +217,7 @@ export async function streamSearchResults(req: Request, res: Response) {
     const aiStatus: SSEEvent = {
       type: "status",
       data: {
+        code: "analyzing_image",
         message: "Analyzing image with AI...",
         retailersSearched: 0,
       },
@@ -226,20 +227,22 @@ export async function streamSearchResults(req: Request, res: Response) {
     try {
       identifiedProducts = await analyzeFrame(
         session.request.frameImage,
-        session.request.highlight,
-        session.request.description
+        session.request.highlight ?? undefined,
+        session.request.description ?? undefined
       );
       console.log(
         `[AI] Detected ${identifiedProducts.length} products for search ${searchId}`
       );
 
       const identifiedStatus: SSEEvent = {
-        type: "status",
-        data: {
-          message: `Identified ${identifiedProducts.length} products — searching Amazon.ca...`,
-          retailersSearched: 0,
-        },
-      };
+      type: "status",
+      data: {
+        code: "identified_products",
+        params: { count: identifiedProducts.length },
+        message: `Identified ${identifiedProducts.length} products — searching retailers...`,
+        retailersSearched: 0,
+      },
+    };
       res.write(
         `event: status\ndata: ${JSON.stringify(identifiedStatus)}\n\n`
       );
@@ -248,49 +251,45 @@ export async function streamSearchResults(req: Request, res: Response) {
       identifiedProducts = MOCK_PRODUCTS.slice(0, 8);
 
       const errorStatus: SSEEvent = {
-        type: "status",
-        data: {
-          message: "AI analysis failed, showing sample results...",
-          retailersSearched: 0,
-        },
-      };
+      type: "status",
+      data: {
+        code: "ai_failed",
+        message: "AI analysis failed, showing sample results...",
+        retailersSearched: 0,
+      },
+    };
       res.write(
         `event: status\ndata: ${JSON.stringify(errorStatus)}\n\n`
       );
     }
   } else {
-    // No API key — use mock products with searchQuery fields for Amazon lookup
+    // No API key — use mock products with searchQuery fields
     identifiedProducts = MOCK_PRODUCTS.slice(0, 8);
   }
 
-  // Step 2: For each identified product, search Amazon and stream results
-  let amazonSearchCount = 0;
+  // Step 2: Enrich products via provider and stream
+  const provider = getProductProvider();
+  let productCount = 0;
 
-  for (let i = 0; i < identifiedProducts.length; i++) {
-    const product = identifiedProducts[i];
+  for await (const enrichedProduct of provider.enrichProducts(identifiedProducts)) {
+    productCount++;
+    const productLabel = `${enrichedProduct.brand !== "Unknown" ? enrichedProduct.brand + " " : ""}${enrichedProduct.name}`;
 
-    // Status: searching Amazon for this product
+    // Status update
     const searchStatus: SSEEvent = {
       type: "status",
       data: {
-        message: `Searching Amazon.ca for ${product.brand !== "Unknown" ? product.brand + " " : ""}${product.name}...`,
-        retailersSearched: amazonSearchCount + 1,
+        code: "found_product",
+        params: { product: productLabel },
+        message: `Found ${productLabel}`,
+        retailersSearched: productCount,
       },
     };
     res.write(`event: status\ndata: ${JSON.stringify(searchStatus)}\n\n`);
 
-    // Search Amazon (mock PA-API call with simulated delay)
-    const listing = await searchAmazon(product);
-    amazonSearchCount++;
-
-    // Enrich product with Amazon data if we got a listing
-    const enrichedProduct = listing
-      ? enrichWithAmazon(product, listing)
-      : product;
-
-    // Small extra delay for the first product (gives the UI time to set up)
-    if (i === 0) {
-      await new Promise((r) => setTimeout(r, 300));
+    // Small delay for first product (provider may already add its own latency)
+    if (productCount === 1) {
+      await new Promise((r) => setTimeout(r, 200));
     }
 
     // Stream the product
@@ -301,7 +300,7 @@ export async function streamSearchResults(req: Request, res: Response) {
     res.write(`event: product\ndata: ${JSON.stringify(productEvent)}\n\n`);
 
     console.log(
-      `[Stream] Product ${i + 1}/${identifiedProducts.length}: ${enrichedProduct.name} → ${listing ? `$${listing.price} CAD (${listing.asin})` : "no Amazon listing"}`
+      `[Stream] Product ${productCount}/${identifiedProducts.length}: ${enrichedProduct.name} → ${enrichedProduct.affiliateUrl ?? enrichedProduct.shopUrl}`
     );
   }
 
@@ -309,7 +308,7 @@ export async function streamSearchResults(req: Request, res: Response) {
 
   const completeEvent: SSEEvent = {
     type: "complete",
-    data: { totalProducts: identifiedProducts.length },
+    data: { totalProducts: productCount },
   };
   res.write(`event: complete\ndata: ${JSON.stringify(completeEvent)}\n\n`);
 

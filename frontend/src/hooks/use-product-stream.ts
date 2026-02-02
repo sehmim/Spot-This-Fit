@@ -3,10 +3,47 @@
 import { useEffect, useRef } from "react";
 import { useResultsStore } from "@/stores/results-store";
 import type { SSEEvent, Product } from "@spotthisfit/shared";
+import { useTranslations } from "@/components/i18n/locale-provider";
+import type { TranslationKey } from "@/lib/i18n";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+type Translator = (
+  key: TranslationKey,
+  params?: Record<string, string | number>,
+) => string;
+
+function translateStreamStatus(
+  code: string,
+  params: Record<string, string | number> | undefined,
+  t: Translator,
+) {
+  switch (code) {
+    case "analyzing_image":
+      return t("results.searchStatus.analyzingImage");
+    case "identified_products":
+      return t("results.searchStatus.identifiedProducts", {
+        count: params?.count ?? 0,
+      });
+    case "ai_failed":
+      return t("results.searchStatus.aiFailed");
+    case "found_product":
+      return t("results.searchStatus.foundProduct", {
+        product: params?.product ?? "",
+      });
+    default:
+      return null;
+  }
+}
+
 export function useProductStream(searchId: string | null) {
+  const t = useTranslations();
+  const tRef = useRef(t);
+
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
   const addStreamedProduct = useResultsStore((s) => s.addStreamedProduct);
   const setIsStreaming = useResultsStore((s) => s.setIsStreaming);
   const setStreamStatus = useResultsStore((s) => s.setStreamStatus);
@@ -33,7 +70,7 @@ export function useProductStream(searchId: string | null) {
 
     resetStream();
     setIsStreaming(true);
-    setStreamStatus("Connecting to search engine...");
+    setStreamStatus(tRef.current("results.searchStatus.connecting"));
 
     const es = new EventSource(`${API_BASE}/api/search/${searchId}/stream`);
     eventSourceRef.current = es;
@@ -42,7 +79,14 @@ export function useProductStream(searchId: string | null) {
       try {
         const event: SSEEvent = JSON.parse(e.data);
         if (event.type === "status") {
-          setStreamStatus(event.data.message);
+          const localizedStatus = event.data.code
+            ? translateStreamStatus(
+                event.data.code,
+                event.data.params,
+                tRef.current,
+              )
+            : null;
+          setStreamStatus(localizedStatus ?? event.data.message);
           setRetailersSearched(event.data.retailersSearched);
         }
       } catch {
@@ -67,7 +111,11 @@ export function useProductStream(searchId: string | null) {
         if (event.type === "complete") {
           setStreamComplete(true);
           setIsStreaming(false);
-          setStreamStatus(`Found ${event.data.totalProducts} products`);
+          setStreamStatus(
+            tRef.current("results.searchStatus.foundProducts", {
+              count: event.data.totalProducts,
+            })
+          );
         }
       } catch {
         // Ignore parse errors
@@ -76,7 +124,7 @@ export function useProductStream(searchId: string | null) {
     });
 
     es.onerror = () => {
-      setError("Connection lost. Please try again.");
+      setError(tRef.current("results.searchStatus.connectionLost"));
       setIsStreaming(false);
       es.close();
     };

@@ -1,4 +1,8 @@
-export function DemoVideo() {
+interface DemoVideoProps {
+  label: string;
+}
+
+export function DemoVideo({ label }: DemoVideoProps) {
   return (
     <section className="w-full max-w-md sm:max-w-lg">
       <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl bg-muted sm:aspect-video">
@@ -8,7 +12,7 @@ export function DemoVideo() {
               <path d="M8 5v14l11-7z" />
             </svg>
           </div>
-          <span className="text-sm font-medium">Demo Video</span>
+          <span className="text-sm font-medium">{label}</span>
         </div>
       </div>
     </section>

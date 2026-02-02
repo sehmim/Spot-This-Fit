@@ -81,14 +81,23 @@ function mapConfidence(score: number): ConfidenceLevel {
 
 export async function analyzeFrame(
   frameImageBase64: string,
-  highlight: HighlightRegion,
-  description: string
+  highlight?: HighlightRegion,
+  description?: string
 ): Promise<Product[]> {
-  const highlightDescription = `The user has drawn a bounding box at approximately: x=${Math.round(highlight.x * 100)}% from left, y=${Math.round(highlight.y * 100)}% from top, width=${Math.round(highlight.width * 100)}%, height=${Math.round(highlight.height * 100)}%. The user describes the highlighted product as: "${description}"`;
+  const hasHighlight = highlight && description;
+
+  const contextBlock = hasHighlight
+    ? `The user has drawn a bounding box at approximately: x=${Math.round(highlight.x * 100)}% from left, y=${Math.round(highlight.y * 100)}% from top, width=${Math.round(highlight.width * 100)}%, height=${Math.round(highlight.height * 100)}%. The user describes the highlighted product as: "${description}"`
+    : `The user uploaded this image directly. There is NO highlighted region — identify ALL fashion products visible in the entire image.`;
+
+  const highlightInstructions = hasHighlight
+    ? `- The highlighted product should be listed FIRST with isHighlighted: true
+- For all OTHER items, set isHighlighted: false`
+    : `- Set isHighlighted: false for all items (no specific product was highlighted)`;
 
   const prompt = `You are an expert fashion product identifier with deep knowledge of brands, product lines, model numbers, colorways, and seasonal collections. Your job is to identify EXACT products — not general descriptions.
 
-${highlightDescription}
+${contextBlock}
 
 Analyze this image and identify ALL fashion products/clothing items visible. For EACH item, you must:
 
@@ -100,8 +109,8 @@ Analyze this image and identify ALL fashion products/clothing items visible. For
 6. **material**: Primary material (e.g. "full-grain leather", "French terry cotton", "ripstop nylon")
 7. **description**: A concise description focusing on distinguishing features, fit, and style details that would help someone find this exact product
 8. **confidence**: 0-100, how confident you are in the EXACT identification (not just the category)
-9. **isHighlighted**: true if this is the item the user highlighted/described
-10. **searchQuery**: An optimized Amazon search query to find this EXACT product. Include brand, model name, color, and key distinguishing features. This should be specific enough to find the right product on Amazon. Example: "Nike Air Force 1 07 Low Triple White Men's" or "Levi's 501 Original Fit Medium Stonewash Men's Jeans"
+9. **isHighlighted**: true ONLY if this is the item the user highlighted/described, false otherwise
+10. **searchQuery**: An optimized retail search query to find this EXACT product. Include brand, model name, color, and key distinguishing features. This should be specific enough to find the right product across retailers. Example: "Nike Air Force 1 07 Low Triple White Men's" or "Levi's 501 Original Fit Medium Stonewash Men's Jeans"
 
 IDENTIFICATION TIPS:
 - For sneakers: Look at sole shape, toe box, midsole profile, heel counter, lacing system, and any visible logos/swooshes/stripes
@@ -111,14 +120,14 @@ IDENTIFICATION TIPS:
 - For jeans: Look at wash, distressing, rise, leg shape, and back pocket stitching
 
 IMPORTANT:
-- The highlighted product should be listed FIRST with isHighlighted: true
+${highlightInstructions}
 - Include ALL visible fashion items
 - Be as SPECIFIC as possible — "Nike Air Max 90 Essential White/Black" is better than "White Nike Sneakers"
-- The searchQuery should be optimized for Amazon.ca product search
+- The searchQuery should be optimized for retail product search
 - If you recognize a specific collection or season (e.g. "FW24", "Spring 2024"), include it
 
 Respond with ONLY a JSON array, no markdown, no explanation:
-[{"name":"...","exactModel":"...","brand":"...","category":"...","color":"...","material":"...","description":"...","confidence":85,"isHighlighted":true,"searchQuery":"..."}, ...]`;
+[{"name":"...","exactModel":"...","brand":"...","category":"...","color":"...","material":"...","description":"...","confidence":85,"isHighlighted":false,"searchQuery":"..."}, ...]`;
 
   // Strip the data:image/jpeg;base64, prefix if present
   const base64Data = frameImageBase64.includes(",")
@@ -174,7 +183,7 @@ Respond with ONLY a JSON array, no markdown, no explanation:
     return b.confidence - a.confidence;
   });
 
-  // Convert to Product type (without Amazon data — that's added later in the pipeline)
+  // Convert to Product type (without listing data — that's added later in the pipeline)
   return detected.map((item) => ({
     id: uuidv4(),
     name: item.name,
@@ -184,7 +193,7 @@ Respond with ONLY a JSON array, no markdown, no explanation:
     price: 0,
     currency: "CAD",
     shopUrl: "#",
-    retailer: "Searching Amazon.ca...",
+    retailer: "Searching retailers...",
     confidence: mapConfidence(item.confidence),
     confidenceScore: item.confidence,
     description: `${item.color} — ${item.description}`,

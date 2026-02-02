@@ -4,6 +4,7 @@ import { useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Play, Pause, Camera } from "lucide-react";
+import { useTranslations } from "@/components/i18n/locale-provider";
 
 interface VideoFrameSelectorProps {
   videoUrl: string;
@@ -20,6 +21,7 @@ export function VideoFrameSelector({
   videoUrl,
   onFrameSelected,
 }: VideoFrameSelectorProps) {
+  const t = useTranslations();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -129,7 +131,7 @@ export function VideoFrameSelector({
 
           <Button size="lg" className="w-full gap-2" onClick={captureFrame}>
             <Camera className="size-4" />
-            Select this frame
+            {t("frame.selectButton")}
           </Button>
         </div>
       )}

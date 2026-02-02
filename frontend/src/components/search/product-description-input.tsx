@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
+import { useTranslations } from "@/components/i18n/locale-provider";
 
 interface ProductDescriptionInputProps {
   value: string;
@@ -11,19 +12,21 @@ export function ProductDescriptionInput({
   value,
   onChange,
 }: ProductDescriptionInputProps) {
+  const t = useTranslations();
+
   return (
     <div className="flex flex-col gap-2">
       <label className="text-sm font-medium">
-        Describe the highlighted product
+        {t("description.label")}
       </label>
       <Input
-        placeholder='e.g. "the blue denim jacket", "white sneakers"'
+        placeholder={t("description.placeholder")}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="h-11 text-base"
       />
       <p className="text-xs text-muted-foreground">
-        Be specific &mdash; this helps our AI prioritize the right product
+        {t("description.helper")}
       </p>
     </div>
   );

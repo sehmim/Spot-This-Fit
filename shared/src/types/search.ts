@@ -32,9 +32,9 @@ export interface SearchResponse {
 
 export interface FrameSearchRequest {
   frameImage: string;
-  highlight: HighlightRegion;
-  description: string;
-  videoUrl: string;
+  highlight?: HighlightRegion;
+  description?: string;
+  videoUrl?: string;
 }
 
 export type SSEEventType = "product" | "status" | "complete" | "error";
@@ -49,6 +49,8 @@ export interface SSEStatusEvent {
   data: {
     message: string;
     retailersSearched: number;
+    code?: string;
+    params?: Record<string, string | number>;
   };
 }
 
