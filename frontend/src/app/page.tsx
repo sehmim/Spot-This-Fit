@@ -86,9 +86,11 @@ export default async function LandingPage() {
           loop
           playsInline
           preload="metadata"
+          poster="/hero-poster.jpg"
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[50%_60%] opacity-30 sm:object-center motion-reduce:hidden"
         >
+          <source src="/hero-mobile.mp4" type="video/mp4" media="(max-width: 640px)" />
           <source src="/hero.mp4" type="video/mp4" />
         </video>
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#F7E7CE]/80 via-[#F7E7CE]/40 to-[#F7E7CE]/80" />
