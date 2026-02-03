@@ -1,3 +1,9 @@
 {
-  "frontend/src/app/layout.tsx": "555339d4720933a208bb68b59daa77d401d6675b"
+  ".promptvc/last_git_state.json": "2e850f874a0ec6cf683aa3d9332f9f8a42c86cd2",
+  ".promptvc/last_prompt_count": "62f9457511f879886bb7728c986fe10b0ece6bcb",
+  ".promptvc/last_session_file": "abfc62c850ffb26f59648f950e45969fc6c215cc",
+  ".promptvc/sessions.json": "731ff53e90e66fd61a2cac6af2f67bb98a90539f",
+  "frontend/src/app/page.tsx": "9d181c9ebb16a82978d3a0f20202a1cead545a12",
+  "frontend/src/components/landing/cta-input.tsx": "7c838b724b49a28117d1074bd1f101eef0ef3716",
+  "frontend/src/components/landing/hero-section.tsx": "83206d996b047f5865aefa2dee81af8ab6e6f110"
 }

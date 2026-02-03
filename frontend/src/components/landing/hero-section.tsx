@@ -23,7 +23,7 @@ export function HeroSection({
         )}
       </h1>
       {(subheadingLine1 || subheadingLine2) && (
-        <p className="max-w-lg text-xs font-semibold uppercase tracking-widest text-muted-foreground sm:text-sm">
+        <p className="max-w-lg text-xs font-semibold uppercase tracking-widest text-primary/80 sm:text-sm">
           {subheadingLine1}
           <br />
           {subheadingLine2}

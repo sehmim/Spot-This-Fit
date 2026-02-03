@@ -77,10 +77,22 @@ export default async function LandingPage() {
       />
       {/* Block 1: Hero + CTA */}
       <div
-        className="flex min-h-[calc(100dvh-64px)] flex-col items-center px-4 sm:px-6 md:px-8"
+        className="relative flex min-h-[calc(100dvh-64px)] flex-col items-center overflow-hidden px-4 sm:px-6 md:px-8"
         style={{ backgroundColor: "#F7E7CE" }}
       >
-        <div className="flex flex-1 flex-col items-center justify-center gap-6">
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[50%_60%] opacity-30 sm:object-center motion-reduce:hidden"
+        >
+          <source src="/hero.mp4" type="video/mp4" />
+        </video>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#F7E7CE]/80 via-[#F7E7CE]/40 to-[#F7E7CE]/80" />
+        <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-6">
           <HeroSection
             titleLine1={t("landing.hero.titleLine1")}
             titleLine2={t("landing.hero.titleLine2")}
@@ -89,7 +101,7 @@ export default async function LandingPage() {
           />
           <CtaInput />
         </div>
-        <p className="mb-8 w-full px-4 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:text-xs sm:tracking-widest">
+        <p className="relative z-10 mb-8 w-full px-4 text-center text-[10px] font-semibold uppercase tracking-wider text-primary/80 sm:text-xs sm:tracking-widest">
           {t("landing.hero.subtitle")}
         </p>
       </div>

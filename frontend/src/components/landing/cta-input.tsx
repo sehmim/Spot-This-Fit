@@ -38,7 +38,7 @@ export function CtaInput() {
           {t("landing.cta.button")}
           <ArrowRight className="size-4" />
         </Button>
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-xs text-primary/80">
           {t("landing.cta.supporting")}
         </p>
       </section>
