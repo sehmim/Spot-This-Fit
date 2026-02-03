@@ -651,8 +651,7 @@ export function getBlogPostSlugs(): string[] {
 }
 
 export function getBlogPostEntries(): Array<{ slug: string; date: string }> {
-  return blogPosts.map((post) => ({ slug: post.slug, date: post.date }));
-}
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
+  return blogPosts
+    .map((post) => ({ slug: post.slug, date: post.date }))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
