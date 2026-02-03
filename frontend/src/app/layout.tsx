@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { LocaleProvider } from "@/components/i18n/locale-provider";
 import { createTranslator } from "@/lib/i18n";
 import { getLocaleFromCookies } from "@/lib/i18n-server";
+import { getSiteUrl } from "@/lib/site";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -19,18 +20,54 @@ export async function generateMetadata(): Promise<Metadata> {
   const t = createTranslator(locale);
   const title = t("metadata.title");
   const description = t("metadata.description");
+  const siteUrl = getSiteUrl();
   return {
+    metadataBase: siteUrl,
     title,
     description,
+    alternates: {
+      canonical: "/",
+    },
+    keywords: [
+      "fashion search",
+      "outfit finder",
+      "find clothes from video",
+      "find clothes from photo",
+      "tiktok outfit finder",
+      "reels outfit finder",
+      "shop the look",
+      "style search",
+      "image to product",
+      "fashion AI",
+    ],
+    robots: {
+      index: true,
+      follow: true,
+    },
+    icons: {
+      icon: "/logo.png",
+      apple: "/logo.png",
+    },
     openGraph: {
       title,
       description,
       type: "website",
+      url: siteUrl.toString(),
+      siteName: "Spot This Fit",
+      images: [
+        {
+          url: "/logo.png",
+          width: 1536,
+          height: 1024,
+          alt: "Spot This Fit logo",
+        },
+      ],
     },
     twitter: {
       card: "summary",
       title,
       description,
+      images: ["/logo.png"],
     },
   };
 }

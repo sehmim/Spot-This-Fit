@@ -16,6 +16,11 @@ import { buildMockResults } from "../mock-data/search-results.js";
 import { MOCK_PRODUCTS } from "../mock-data/products.js";
 import { analyzeFrame } from "../services/vision.js";
 import { getProductProvider } from "../services/product-enrichment.js";
+import type {
+  CjGraphQlResponse,
+  CjProduct,
+  CjProductsResult,
+} from "../services/providers/types.js";
 
 interface SearchSession {
   request: SearchRequest;
@@ -32,6 +37,350 @@ const STATUS_PROGRESSION: { status: SearchStatus; progress: number }[] = [
   { status: "finding_prices", progress: 90 },
   { status: "complete", progress: 100 },
 ];
+
+const CJ_PRODUCTS_QUERY_WITH_SORT = `
+  query Products(
+    $companyId: ID!
+    $keywords: [String!]
+    $limit: Int
+    $offset: Int
+    $partnerStatus: PartnerStatus
+    $availability: Availability
+    $sortBy: SortBy
+    $sortOrder: SortOrder
+    $advertiserCountries: [String!]
+    $currency: String
+  ) {
+    products(
+      companyId: $companyId
+      keywords: $keywords
+      limit: $limit
+      offset: $offset
+      partnerStatus: $partnerStatus
+      availability: $availability
+      sortBy: $sortBy
+      sortOrder: $sortOrder
+      advertiserCountries: $advertiserCountries
+      currency: $currency
+    ) {
+      resultList {
+        id
+        title
+        description
+        brand
+        imageLink
+        additionalImageLink
+        link
+        mobileLink
+        linkCode(pid: $companyId) {
+          clickUrl
+        }
+        advertiserName
+        advertiserId
+        advertiserCountry
+        price {
+          amount
+          currency
+        }
+        salePrice {
+          amount
+          currency
+        }
+      }
+      totalCount
+      limit
+      count
+      nextPage
+    }
+  }
+`;
+
+const CJ_PRODUCTS_QUERY_NO_SORT = `
+  query Products(
+    $companyId: ID!
+    $keywords: [String!]
+    $limit: Int
+    $offset: Int
+    $partnerStatus: PartnerStatus
+    $availability: Availability
+    $advertiserCountries: [String!]
+    $currency: String
+  ) {
+    products(
+      companyId: $companyId
+      keywords: $keywords
+      limit: $limit
+      offset: $offset
+      partnerStatus: $partnerStatus
+      availability: $availability
+      advertiserCountries: $advertiserCountries
+      currency: $currency
+    ) {
+      resultList {
+        id
+        title
+        description
+        brand
+        imageLink
+        additionalImageLink
+        link
+        mobileLink
+        linkCode(pid: $companyId) {
+          clickUrl
+        }
+        advertiserName
+        advertiserId
+        advertiserCountry
+        price {
+          amount
+          currency
+        }
+        salePrice {
+          amount
+          currency
+        }
+      }
+      totalCount
+      limit
+      count
+      nextPage
+    }
+  }
+`;
+
+function getQueryString(
+  value: string | string[] | undefined
+): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+function parseNumber(
+  value: string | string[] | undefined
+): number | undefined {
+  const raw = getQueryString(value);
+  if (!raw) return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseList(
+  value: string | string[] | undefined
+): string[] | undefined {
+  if (!value) return undefined;
+  if (Array.isArray(value)) {
+    const items = value.map((item) => item.trim()).filter(Boolean);
+    return items.length ? items : undefined;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (!trimmed.includes(",")) return [trimmed];
+  const items = trimmed.split(",").map((item) => item.trim()).filter(Boolean);
+  return items.length ? items : undefined;
+}
+
+function parseEnum(
+  value: string | string[] | undefined,
+  allowed: string[]
+): string | undefined {
+  const raw = getQueryString(value);
+  if (!raw) return undefined;
+  const normalized = raw.toUpperCase();
+  return allowed.includes(normalized) ? normalized : undefined;
+}
+
+export async function searchCjProducts(req: Request, res: Response) {
+  const token = process.env.CJ_AUTH_TOKEN ?? "";
+  const companyId =
+    getQueryString(req.query.companyId) ?? process.env.CJ_COMPANY_ID ?? "";
+  const keywords =
+    parseList(req.query.keywords) ??
+    parseList(req.query.query) ??
+    parseList(req.query.q);
+
+  if (!companyId || !token) {
+    const error: ApiError = {
+      success: false,
+      error: {
+        code: "CONFIG_MISSING",
+        message: "CJ_AUTH_TOKEN and CJ_COMPANY_ID are required",
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(400).json(error);
+    return;
+  }
+
+  if (!keywords || keywords.length === 0) {
+    const error: ApiError = {
+      success: false,
+      error: {
+        code: "INVALID_REQUEST",
+        message: "Provide a query via ?q= or ?keywords=",
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(400).json(error);
+    return;
+  }
+
+  const envSortBy = parseEnum(process.env.CJ_SORT_BY, [
+    "PRICE",
+    "LAST_UPDATED",
+  ]);
+  const envSortOrder = parseEnum(process.env.CJ_SORT_ORDER, ["ASC", "DESC"]);
+  const sortBy =
+    parseEnum(req.query.sortBy, ["PRICE", "LAST_UPDATED"]) ?? envSortBy;
+  const sortOrder =
+    parseEnum(req.query.sortOrder, ["ASC", "DESC"]) ?? envSortOrder;
+  const useSorting = Boolean(sortBy && sortOrder);
+
+  const variables: {
+    companyId: string;
+    keywords: string[];
+    limit?: number;
+    offset?: number;
+    partnerStatus: string;
+    availability: string;
+    advertiserCountries?: string[];
+    currency?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  } = {
+    companyId,
+    keywords,
+    limit:
+      parseNumber(req.query.limit) ??
+      Number(process.env.CJ_PRODUCT_LIMIT ?? 5),
+    offset: parseNumber(req.query.offset),
+    partnerStatus:
+      parseEnum(req.query.partnerStatus, ["JOINED", "NOT_JOINED"]) ??
+      (process.env.CJ_PARTNER_STATUS ?? "JOINED"),
+    availability:
+      parseEnum(req.query.availability, [
+        "IN_STOCK",
+        "OUT_OF_STOCK",
+        "PREORDER",
+        "BACKORDER",
+      ]) ?? (process.env.CJ_AVAILABILITY ?? "IN_STOCK"),
+    advertiserCountries:
+      parseList(req.query.advertiserCountries) ??
+      parseList(req.query.countries) ??
+      (process.env.CJ_ADVERTISER_COUNTRIES
+        ? process.env.CJ_ADVERTISER_COUNTRIES.split(",")
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : undefined),
+    currency: getQueryString(req.query.currency) ?? process.env.CJ_CURRENCY,
+  };
+  if (useSorting) {
+    variables.sortBy = sortBy;
+    variables.sortOrder = sortOrder;
+  }
+
+  const authHeader = token.startsWith("Bearer ")
+    ? token
+    : `Bearer ${token}`;
+
+  try {
+    const response = await fetch(
+      process.env.CJ_API_URL ?? "https://ads.api.cj.com/query",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({
+          query: useSorting
+            ? CJ_PRODUCTS_QUERY_WITH_SORT
+            : CJ_PRODUCTS_QUERY_NO_SORT,
+          variables,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      const error: ApiError = {
+        success: false,
+        error: {
+          code: "CJ_API_ERROR",
+          message: `CJ API error ${response.status}`,
+          details: { response: text.slice(0, 200) },
+        },
+        timestamp: new Date().toISOString(),
+      };
+      res.status(502).json(error);
+      return;
+    }
+
+    const json = (await response.json()) as CjGraphQlResponse<{
+      products: CjProductsResult;
+    }>;
+
+    if (json.errors?.length) {
+      const error: ApiError = {
+        success: false,
+        error: {
+          code: "CJ_API_ERROR",
+          message: json.errors.map((err) => err.message).join("; "),
+        },
+        timestamp: new Date().toISOString(),
+      };
+      res.status(502).json(error);
+      return;
+    }
+
+    const result = json.data?.products;
+    if (!result) {
+      const error: ApiError = {
+        success: false,
+        error: {
+          code: "CJ_API_EMPTY",
+          message: "CJ API returned no data",
+        },
+        timestamp: new Date().toISOString(),
+      };
+      res.status(502).json(error);
+      return;
+    }
+
+    const data: {
+      products: CjProduct[];
+      totalCount: number;
+      count: number;
+      limit: number;
+      nextPage?: string | null;
+    } = {
+      products: result.resultList,
+      totalCount: result.totalCount,
+      count: result.count,
+      limit: result.limit,
+      nextPage: result.nextPage ?? undefined,
+    };
+
+    const payload: ApiResponse<typeof data> = {
+      success: true,
+      data,
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json(payload);
+  } catch (err) {
+    const error: ApiError = {
+      success: false,
+      error: {
+        code: "CJ_API_ERROR",
+        message: "Failed to reach CJ API",
+        details: { error: String(err) },
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(502).json(error);
+  }
+}
 
 export async function createSearch(req: Request, res: Response) {
   const body = req.body as SearchRequest;

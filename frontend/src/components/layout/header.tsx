@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { locales } from "@/lib/i18n";
@@ -35,11 +36,23 @@ export function Header() {
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-sm">
       <div className="flex h-16 items-center justify-between px-4 sm:px-6 md:mx-auto md:max-w-5xl">
         <Link href="/" className="flex items-center gap-2">
-          <span className="text-sm font-bold uppercase tracking-wider sm:text-base">
-            {t("header.brand")}
-          </span>
+          <Image
+            src="/logo-blank.png"
+            alt={t("header.brand")}
+            width={440}
+            height={164}
+            priority
+            className="h-14 w-auto sm:h-16"
+          />
+          <span className="sr-only">{t("header.brand")}</span>
         </Link>
         <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            href="/blog"
+            className="hidden text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground sm:inline-flex"
+          >
+            {t("header.blog")}
+          </Link>
           <Button size="sm" className="gap-1.5 rounded-full cursor-pointer" asChild>
             <Link href="/search">
               {t("landing.cta.button")}

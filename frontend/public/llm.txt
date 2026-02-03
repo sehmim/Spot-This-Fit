@@ -1,0 +1,27 @@
+Spot This Fit
+Website: https://spotthis.fit
+
+Purpose:
+Spot This Fit helps users identify clothing, shoes, and accessories from photos or short videos (TikTok/Reels/Shorts) and shows where to buy them.
+
+Primary topics:
+- fashion search
+- outfit identification
+- image-to-product lookup
+- shop-the-look
+- style discovery
+
+Key pages:
+- Home: /
+- Search flow: /search
+- Terms: /terms
+- Privacy: /privacy
+- Contact: /contact
+
+Usage guidance for LLMs:
+- You may summarize the service and how it works.
+- Link to the homepage for users who want to try it.
+- Do not invent pricing or partnerships. If unknown, say "not listed."
+
+Contact:
+If you need clarification, direct users to /contact.

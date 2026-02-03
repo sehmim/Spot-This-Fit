@@ -57,6 +57,7 @@ src/
 │   ├── product-enrichment.ts   # Provider factory (reads PRODUCT_PROVIDER env)
 │   └── providers/
 │       ├── types.ts            # ProductProvider interface
+│       ├── cj-product-feed.ts  # CJ Product Feed GraphQL API
 │       ├── affiliate-com.ts    # Affiliate.com API + mock mode
 │       └── amazon.ts           # Amazon Associates provider
 └── mock-data/                  # Fallback demo data
@@ -145,7 +146,7 @@ src/
 3. Backend calls **OpenAI GPT-4V** to identify clothing items
 4. Backend returns a `searchId`
 5. Frontend navigates to `/results` and opens an **EventSource** to `GET /api/search/:id/stream`
-6. Backend enriches each identified product via the **product provider** (affiliate.com or Amazon)
+6. Backend enriches each identified product via the **product provider** (CJ Product Feed, affiliate.com, or Amazon)
 7. Products stream to the frontend one at a time via **Server-Sent Events**
 8. Frontend renders products with spring animations as they arrive
 
@@ -157,13 +158,14 @@ The backend uses a pluggable provider pattern for product enrichment:
 
 ```
 ProductProvider interface
-├── AffiliateComProvider   (default, reads AFFILIATE_COM_TOKEN)
+├── CjProductFeedProvider  (default, reads CJ_AUTH_TOKEN + CJ_COMPANY_ID)
+├── AffiliateComProvider   (reads AFFILIATE_COM_TOKEN)
 │   ├── Real mode          (when token is set — calls POST /v1/products)
 │   └── Mock mode          (when token is empty — generates fake listings)
 └── AmazonProvider         (generates Amazon search URLs)
 ```
 
-Switch providers via the `PRODUCT_PROVIDER` environment variable (`affiliate_com` or `amazon`).
+Switch providers via the `PRODUCT_PROVIDER` environment variable (`cj`, `affiliate_com`, or `amazon`).
 
 The provider implements an `AsyncGenerator<Product>` so products yield one at a time, naturally feeding the SSE stream.
 

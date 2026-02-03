@@ -12,5 +12,6 @@ dist/
 ./backend/.env
 /videos
 
-.promptvc/*
+.promptvc/
 .env*.local
+.promptvc

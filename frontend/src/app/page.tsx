@@ -5,10 +5,12 @@ import { PlatformLogos } from "@/components/landing/platform-logos";
 import { CtaInput } from "@/components/landing/cta-input";
 import { createTranslator } from "@/lib/i18n";
 import { getLocaleFromCookies } from "@/lib/i18n-server";
+import { getSiteUrl } from "@/lib/site";
 
 export default async function LandingPage() {
   const locale = await getLocaleFromCookies();
   const t = createTranslator(locale);
+  const siteUrl = getSiteUrl().toString().replace(/\/$/, "");
   const steps = [
     {
       title: t("landing.howItWorks.step1.title"),
@@ -41,9 +43,38 @@ export default async function LandingPage() {
     t("landing.useCases.item4"),
     t("landing.useCases.item5"),
   ];
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Spot This Fit",
+    url: siteUrl,
+    description: t("metadata.description"),
+    potentialAction: {
+      "@type": "SearchAction",
+      target: `${siteUrl}/search?q={search_term_string}`,
+      "query-input": "required name=search_term_string",
+    },
+  };
+  const appStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Spot This Fit",
+    applicationCategory: "LifestyleApplication",
+    operatingSystem: "Web",
+    description: t("metadata.description"),
+    url: siteUrl,
+  };
 
   return (
     <div className="flex flex-col">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(appStructuredData) }}
+      />
       {/* Block 1: Hero + CTA */}
       <div
         className="flex min-h-[calc(100dvh-64px)] flex-col items-center px-4 sm:px-6 md:px-8"
@@ -88,7 +119,7 @@ export default async function LandingPage() {
         className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-12 sm:px-6 md:px-8"
         style={{ backgroundColor: "#F7E7CE" }}
       >
-        <section className="w-full max-w-3xl rounded-2xl border border-black/10 bg-white/70 p-6 text-left">
+        <section style={{ backgroundColor: "white" }}  className="w-full max-w-3xl rounded-2xl border border-black/10 bg-white/70 p-6 text-left bg-white">
           <h2 className="text-lg font-semibold uppercase sm:text-xl">
             {t("landing.problem.title")}
           </h2>
@@ -98,7 +129,7 @@ export default async function LandingPage() {
             ))}
           </ul>
         </section>
-        <section className="w-full max-w-3xl rounded-2xl border border-black/10 bg-white/70 p-6 text-left">
+        <section style={{ backgroundColor: "white" }} className="w-full max-w-3xl rounded-2xl border border-black/10 bg-white/70 p-6 text-left">
           <h2 className="text-lg font-semibold uppercase sm:text-xl">
             {t("landing.useCases.title")}
           </h2>
@@ -108,7 +139,7 @@ export default async function LandingPage() {
             ))}
           </ul>
         </section>
-        <section className="w-full max-w-3xl rounded-2xl border border-black/10 bg-white/70 p-6 text-left">
+        <section style={{ backgroundColor: "white" }}  className="w-full max-w-3xl rounded-2xl border border-black/10 bg-white/70 p-6 text-left bg-white">
           <PlatformLogos
             title={t("landing.platforms.title")}
             labels={platformLabels}

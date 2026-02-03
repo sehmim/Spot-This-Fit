@@ -1,10 +1,12 @@
 import type { ProductProvider } from "./providers/types.js";
 import { AffiliateComProvider } from "./providers/affiliate-com.js";
 import { AmazonProvider } from "./providers/amazon.js";
+import { CjProductFeedProvider } from "./providers/cj-product-feed.js";
 
-type ProviderName = "affiliate_com" | "amazon";
+type ProviderName = "cj" | "affiliate_com" | "amazon";
 
 const providers: Record<ProviderName, () => ProductProvider> = {
+  cj: () => new CjProductFeedProvider(),
   affiliate_com: () => new AffiliateComProvider(),
   amazon: () => new AmazonProvider(),
 };
@@ -13,21 +15,21 @@ let cached: ProductProvider | null = null;
 
 /**
  * Returns the active product provider based on the PRODUCT_PROVIDER
- * environment variable.  Defaults to "affiliate_com".
+ * environment variable.  Defaults to "cj".
  *
  * The instance is cached for the lifetime of the process.
  */
 export function getProductProvider(): ProductProvider {
   if (cached) return cached;
 
-  const name = (process.env.PRODUCT_PROVIDER ?? "affiliate_com") as ProviderName;
+  const name = (process.env.PRODUCT_PROVIDER ?? "cj") as ProviderName;
   const factory = providers[name];
 
   if (!factory) {
     console.warn(
-      `[enrichment] Unknown PRODUCT_PROVIDER "${name}", falling back to affiliate_com`
+      `[enrichment] Unknown PRODUCT_PROVIDER "${name}", falling back to cj`
     );
-    cached = new AffiliateComProvider();
+    cached = new CjProductFeedProvider();
   } else {
     cached = factory();
   }

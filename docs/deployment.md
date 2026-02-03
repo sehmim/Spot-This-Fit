@@ -20,7 +20,7 @@
 ```
 
 - **Vercel** serves the Next.js frontend. Static pages are cached at the edge.
-- **Railway** runs the Express backend for AI vision (GPT-4V), product enrichment (affiliate.com), and SSE streaming.
+- **Railway** runs the Express backend for AI vision (GPT-4V), product enrichment (CJ Product Feed), and SSE streaming.
 - The frontend proxies all `/api/*` requests to the backend via Next.js [rewrites](https://nextjs.org/docs/app/api-reference/config/next-config-js/rewrites), so the browser only talks to the Vercel domain. This eliminates CORS issues and keeps the backend URL private.
 
 ---
@@ -31,6 +31,7 @@
 - [Vercel](https://vercel.com) account
 - [Railway](https://railway.app) account
 - OpenAI API key (for GPT-4V vision)
+- (Optional) CJ Product Feed credentials (Personal Access Token + company ID)
 - (Optional) Affiliate.com API credentials
 
 ---
@@ -54,7 +55,18 @@ Add these in the Railway dashboard (Variables tab):
 | ----------------------------- | -------- | -------------------------------------------- |
 | `PORT`                        | Auto     | Railway sets this automatically               |
 | `OPENAI_API_KEY`              | Yes      | OpenAI API key for GPT-4V vision             |
-| `PRODUCT_PROVIDER`            | No       | `affiliate_com` (default) or `amazon`        |
+| `PRODUCT_PROVIDER`            | No       | `cj` (default), `affiliate_com`, or `amazon` |
+| `CJ_API_URL`                  | No       | `https://ads.api.cj.com/query`               |
+| `CJ_AUTH_TOKEN`               | No       | CJ Personal Access Token                     |
+| `CJ_COMPANY_ID`               | No       | Your CJ company ID (publisher ID)            |
+| `CJ_PRODUCT_LIMIT`            | No       | Max products to fetch per AI item            |
+| `CJ_PARTNER_STATUS`           | No       | `JOINED` or `NOT_JOINED`                     |
+| `CJ_AVAILABILITY`             | No       | `IN_STOCK`, `OUT_OF_STOCK`, `PREORDER`, `BACKORDER` |
+| `CJ_SORT_BY`                  | No       | `PRICE` or `LAST_UPDATED`                    |
+| `CJ_SORT_ORDER`               | No       | `ASC` or `DESC`                              |
+| `CJ_ADVERTISER_COUNTRIES`     | No       | Comma-separated country codes (e.g. `US,CA`) |
+| `CJ_CURRENCY`                 | No       | Filter results by currency (e.g. `USD`)      |
+| `CJ_SID`                      | No       | Optional SID appended to click URLs          |
 | `AFFILIATE_COM_API_URL`       | No       | `https://api.affiliate.com`                  |
 | `AFFILIATE_COM_TOKEN`         | No       | Leave empty for mock mode                    |
 | `AFFILIATE_COM_AFFILIATE_ID`  | No       | Your affiliate ID                            |
@@ -108,6 +120,7 @@ Add in the Vercel dashboard (Settings > Environment Variables):
 | Variable      | Required | Description                                       |
 | ------------- | -------- | ------------------------------------------------- |
 | `BACKEND_URL` | Yes      | Railway backend URL (e.g. `https://spotthisfit-backend-production.up.railway.app`) |
+| `NEXT_PUBLIC_SITE_URL` | No | Public site URL for metadata/sitemap (e.g. `https://spotthis.fit`) |
 
 ### How API Proxying Works
 
@@ -151,7 +164,12 @@ The frontend `next.config.ts` rewrites default to `http://localhost:4000` when `
 
 ```env
 OPENAI_API_KEY=sk-...
-PRODUCT_PROVIDER=affiliate_com
+PRODUCT_PROVIDER=cj
+CJ_API_URL=https://ads.api.cj.com/query
+CJ_AUTH_TOKEN=
+CJ_COMPANY_ID=
+CJ_PRODUCT_LIMIT=5
+CJ_SID=
 AFFILIATE_COM_API_URL=https://api.affiliate.com
 AFFILIATE_COM_TOKEN=
 AFFILIATE_COM_AFFILIATE_ID=
@@ -159,7 +177,7 @@ AFFILIATE_COM_SUB_ID=
 AFFILIATE_COM_NETWORK_ID=
 ```
 
-When `AFFILIATE_COM_TOKEN` is empty, the affiliate.com provider runs in **mock mode** — generating realistic fake product listings with Unsplash images so the full UI flow works without API keys.
+When `CJ_AUTH_TOKEN` or `CJ_COMPANY_ID` is missing, the CJ provider returns AI-only products. When `AFFILIATE_COM_TOKEN` is empty, the affiliate.com provider runs in **mock mode** — generating realistic fake product listings with Unsplash images so the full UI flow works without API keys.
 
 ---
 

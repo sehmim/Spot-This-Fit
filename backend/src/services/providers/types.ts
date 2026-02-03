@@ -105,3 +105,59 @@ export interface AffiliateComResponse {
   };
   data: AffiliateComProduct[];
 }
+
+// ── CJ Product Feed API types ──────────────────────────────────────
+
+export interface CjConfig {
+  apiUrl: string;
+  token: string;
+  companyId: string;
+  partnerStatus: "JOINED" | "NOT_JOINED";
+  availability: "IN_STOCK" | "OUT_OF_STOCK" | "PREORDER" | "BACKORDER";
+  sortBy?: "PRICE" | "LAST_UPDATED";
+  sortOrder?: "ASC" | "DESC";
+  limit: number;
+  advertiserCountries?: string[];
+  currency?: string;
+  sid: string;
+}
+
+export interface CjAmountWithCurrency {
+  amount: string | number;
+  currency?: string | null;
+}
+
+export interface CjLinkCode {
+  clickUrl?: string | null;
+  imageUrl?: string | null;
+}
+
+export interface CjProduct {
+  id: string;
+  title?: string | null;
+  description: string;
+  brand?: string | null;
+  imageLink?: string | null;
+  additionalImageLink?: string[] | null;
+  link?: string | null;
+  mobileLink?: string | null;
+  linkCode?: CjLinkCode | null;
+  advertiserName: string;
+  advertiserId: string;
+  advertiserCountry?: string | null;
+  price: CjAmountWithCurrency;
+  salePrice?: CjAmountWithCurrency | null;
+}
+
+export interface CjProductsResult {
+  resultList: CjProduct[];
+  totalCount: number;
+  limit: number;
+  count: number;
+  nextPage?: string | null;
+}
+
+export interface CjGraphQlResponse<T> {
+  data?: T;
+  errors?: Array<{ message: string }>;
+}
