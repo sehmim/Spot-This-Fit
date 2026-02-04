@@ -123,3 +123,10 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .uppercase,
+  .uppercase * {
+    -webkit-text-stroke-width: thin;
+  }
+}

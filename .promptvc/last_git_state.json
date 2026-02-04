@@ -1,7 +1,9 @@
 {
-  ".promptvc/last_git_state.json": "75e12264bff89a5eea16a8eb0288e66b52c7fc3c",
-  ".promptvc/last_prompt_count": "8e2afd342773582f9484b796cdc0b84736e8194e",
-  ".promptvc/sessions.json": "e58b15c4a77e86f09532a92366f1e1eb67f6db2f",
-  "frontend/public/hero.mp4": "81ca077711927f98a3de2c22c683455435c41cae",
-  "frontend/src/app/page.tsx": "553eb7c1dfb276e7d0c1c170b59378dbd6f19cff"
+  ".promptvc/last_git_state.json": "c2c5ef6d8b6e625e7210bc698e623e79265c90c0",
+  ".promptvc/last_prompt_count": "bf0d87ab1b2b0ec1a11a3973d2845b42413d9767",
+  ".promptvc/last_session_file": "d412306dad6cef7e2e153e85fd5b76f15ccc8c17",
+  ".promptvc/sessions.json": "9302d739847d411021f4470bd3bb9aec5b56d002",
+  "frontend/src/app/globals.css": "4aacb9607a6409d35f6db0f70906e9f3c409ae24",
+  "frontend/src/components/landing/hero-section.tsx": "ff9a60c58dad7edd8d7e40f73b81e692b837c70b",
+  "frontend/src/locales/en.json": "b8950b4657a9e15f5d86f52d610cdf021154d590"
 }
