@@ -18,6 +18,26 @@ export interface ProductProvider {
    * results to the client via SSE as each product is resolved.
    */
   enrichProducts(products: Product[]): AsyncGenerator<Product>;
+
+  /**
+   * Optional paginated search for additional product suggestions.
+   * Returns standardized Product objects for infinite scroll results.
+   */
+  searchSuggestions?(
+    query: string,
+    options: ProductSearchOptions
+  ): Promise<ProductSuggestionResult>;
+}
+
+export interface ProductSearchOptions {
+  limit: number;
+  offset?: number;
+}
+
+export interface ProductSuggestionResult {
+  products: Product[];
+  nextOffset?: number | null;
+  totalCount?: number;
 }
 
 // ── affiliate.com API types ────────────────────────────────────────
@@ -160,4 +180,109 @@ export interface CjProductsResult {
 export interface CjGraphQlResponse<T> {
   data?: T;
   errors?: Array<{ message: string }>;
+}
+
+// ── Awin API types ──────────────────────────────────────────────────
+
+export interface AwinConfig {
+  apiKey: string;
+  feedIds: string[];
+  language: string;
+  compression: "gzip" | "zip" | "none";
+  refreshIntervalMs: number;
+  columns: string[];
+  localFeedPath?: string; // Path to local CSV file (bypasses API)
+}
+
+export interface AwinProduct {
+  // Core identifiers
+  aw_product_id: string;
+  product_name: string;
+  merchant_product_id?: string;
+
+  // Brand info
+  brand_name?: string;
+  brand_id?: string;
+
+  // Images
+  aw_image_url: string;
+  merchant_image_url?: string;
+  large_image?: string;
+  alternate_image?: string;
+  alternate_image_two?: string;
+  alternate_image_three?: string;
+  merchant_thumb_url?: string;
+  aw_thumb_url?: string;
+
+  // Pricing
+  search_price: string;
+  store_price?: string;
+  rrp_price?: string;
+  saving?: string;
+  savings_percent?: string;
+  currency: string;
+  display_price?: string;
+  delivery_cost?: string;
+
+  // Links
+  aw_deep_link: string;
+  merchant_deep_link: string;
+
+  // Merchant info
+  merchant_name: string;
+  merchant_id?: string;
+
+  // Description & content
+  description: string;
+  product_short_description?: string;
+  specifications?: string;
+  keywords?: string;
+
+  // Categories
+  merchant_category?: string;
+  category_name: string;
+  category_id?: string;
+  merchant_product_category_path?: string;
+  product_type?: string;
+
+  // Product attributes
+  colour?: string;
+  condition?: string;
+  product_model?: string;
+  model_number?: string;
+
+  // Fashion-specific fields
+  "Fashion:suitable_for"?: string;
+  "Fashion:category"?: string;
+  "Fashion:size"?: string;
+  "Fashion:material"?: string;
+  "Fashion:pattern"?: string;
+  "Fashion:swatch"?: string;
+
+  // Stock & availability
+  in_stock?: string;
+  stock_quantity?: string;
+  stock_status?: string;
+  size_stock_status?: string;
+
+  // Reviews & ratings
+  average_rating?: string;
+  rating?: string;
+  reviews?: string;
+
+  // Additional info
+  language?: string;
+  last_updated?: string;
+  data_feed_id?: string;
+  ean?: string;
+  mpn?: string;
+
+  // Allow additional dynamic fields
+  [key: string]: string | undefined;
+}
+
+export interface AwinSearchResult {
+  product: AwinProduct;
+  score: number;
+  feedId: string;
 }

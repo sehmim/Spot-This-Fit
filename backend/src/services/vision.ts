@@ -21,6 +21,7 @@ export interface DetectedProduct {
 }
 
 const CATEGORY_MAP: Record<string, ProductCategory> = {
+  // Tops
   top: "top",
   shirt: "top",
   tshirt: "top",
@@ -29,7 +30,15 @@ const CATEGORY_MAP: Record<string, ProductCategory> = {
   hoodie: "top",
   blouse: "top",
   tank: "top",
+  "tank top": "top",
   polo: "top",
+  cardigan: "top",
+  "crop top": "top",
+  tunic: "top",
+  camisole: "top",
+  bodysuit: "top",
+
+  // Bottoms
   bottom: "bottom",
   pants: "bottom",
   jeans: "bottom",
@@ -37,35 +46,102 @@ const CATEGORY_MAP: Record<string, ProductCategory> = {
   shorts: "bottom",
   skirt: "bottom",
   chinos: "bottom",
+  leggings: "bottom",
+  joggers: "bottom",
+  "cargo pants": "bottom",
+  culottes: "bottom",
+
+  // Dresses & Jumpsuits
   dress: "dress",
+  "mini dress": "dress",
+  "midi dress": "dress",
+  "maxi dress": "dress",
+  jumpsuit: "dress",
+  romper: "dress",
+  playsuit: "dress",
+
+  // Outerwear
   outerwear: "outerwear",
   jacket: "outerwear",
   coat: "outerwear",
   blazer: "outerwear",
   vest: "outerwear",
+  parka: "outerwear",
+  windbreaker: "outerwear",
+  bomber: "outerwear",
+  "denim jacket": "outerwear",
+  "leather jacket": "outerwear",
+  trench: "outerwear",
+  puffer: "outerwear",
+  fleece: "outerwear",
+
+  // Shoes
   shoes: "shoes",
   sneakers: "shoes",
   boots: "shoes",
+  "ankle boots": "shoes",
   loafers: "shoes",
   sandals: "shoes",
   heels: "shoes",
+  flats: "shoes",
+  oxfords: "shoes",
+  mules: "shoes",
+  slides: "shoes",
+  "running shoes": "shoes",
+  "high tops": "shoes",
+  espadrilles: "shoes",
+
+  // Accessories
   accessory: "accessory",
   hat: "accessory",
   cap: "accessory",
+  beanie: "accessory",
   sunglasses: "accessory",
+  glasses: "accessory",
   watch: "accessory",
   belt: "accessory",
   scarf: "accessory",
+  tie: "accessory",
+  gloves: "accessory",
+  wallet: "accessory",
+  "phone case": "accessory",
+  headband: "accessory",
+  "hair clip": "accessory",
+  socks: "accessory",
+
+  // Bags
   bag: "bag",
   backpack: "bag",
   purse: "bag",
   crossbody: "bag",
   tote: "bag",
+  clutch: "bag",
+  "shoulder bag": "bag",
+  "messenger bag": "bag",
+  "fanny pack": "bag",
+  duffel: "bag",
+
+  // Jewelry
   jewelry: "jewelry",
   necklace: "jewelry",
   bracelet: "jewelry",
   earrings: "jewelry",
   ring: "jewelry",
+  anklet: "jewelry",
+  brooch: "jewelry",
+  cufflinks: "jewelry",
+  pendant: "jewelry",
+
+  // Swimwear
+  swimwear: "other",
+  bikini: "other",
+  "one-piece": "other",
+  "swim trunks": "other",
+
+  // Activewear
+  "sports bra": "top",
+  "yoga pants": "bottom",
+  "athletic shorts": "bottom",
 };
 
 function mapCategory(raw: string): ProductCategory {
@@ -95,39 +171,78 @@ export async function analyzeFrame(
 - For all OTHER items, set isHighlighted: false`
     : `- Set isHighlighted: false for all items (no specific product was highlighted)`;
 
-  const prompt = `You are an expert fashion product identifier with deep knowledge of brands, product lines, model numbers, colorways, and seasonal collections. Your job is to identify EXACT products — not general descriptions.
+  const prompt = `You are an expert fashion product identifier. Your task is to identify EVERY fashion item visible in this image with maximum detail for product search matching.
 
 ${contextBlock}
 
-Analyze this image and identify ALL fashion products/clothing items visible. For EACH item, you must:
+## YOUR TASK
+Scan the ENTIRE image and identify ALL fashion items including:
+- Clothing: tops, shirts, t-shirts, sweaters, hoodies, jackets, coats, blazers, dresses, pants, jeans, shorts, skirts, jumpsuits
+- Footwear: sneakers, boots, heels, sandals, loafers, flats, slides
+- Bags: backpacks, totes, crossbody bags, clutches, purses, shoulder bags
+- Accessories: hats, caps, beanies, sunglasses, watches, belts, scarves, ties, gloves
+- Jewelry: necklaces, bracelets, earrings, rings, anklets
+- Even partially visible items (sleeves, hems, straps showing)
 
-1. **name**: The EXACT product name if recognizable (e.g. "Nike Air Force 1 '07 Low", "Levi's 501 Original Fit", "The North Face Nuptse 1996"). If you can't identify the exact product, use a detailed descriptive name.
-2. **exactModel**: The specific model/variant/SKU identifier if recognizable (e.g. "CW2288-111", "501-0115", "NF0A3C8D"). Set to null if unknown.
-3. **brand**: The brand name. Look for logos, distinctive design elements, stitching patterns, label placements, and silhouette signatures. Set to null only if truly unidentifiable.
-4. **category**: One of: top, shirt, tshirt, sweater, hoodie, pants, jeans, shorts, skirt, dress, jacket, coat, blazer, shoes, sneakers, boots, loafers, hat, cap, sunglasses, bag, crossbody, belt, watch, necklace, bracelet, earrings, ring, accessory, other
-5. **color**: Exact colorway name if known (e.g. "Triple White", "Obsidian/University Blue"), otherwise descriptive colors
-6. **material**: Primary material (e.g. "full-grain leather", "French terry cotton", "ripstop nylon")
-7. **description**: A concise description focusing on distinguishing features, fit, and style details that would help someone find this exact product
-8. **confidence**: 0-100, how confident you are in the EXACT identification (not just the category)
-9. **isHighlighted**: true ONLY if this is the item the user highlighted/described, false otherwise
-10. **searchQuery**: An optimized retail search query to find this EXACT product. Include brand, model name, color, and key distinguishing features. This should be specific enough to find the right product across retailers. Example: "Nike Air Force 1 07 Low Triple White Men's" or "Levi's 501 Original Fit Medium Stonewash Men's Jeans"
+## OUTPUT FORMAT
+For EACH item, provide:
 
-IDENTIFICATION TIPS:
-- For sneakers: Look at sole shape, toe box, midsole profile, heel counter, lacing system, and any visible logos/swooshes/stripes
-- For bags: Look at hardware, strap style, closure type, logo placement, and distinctive shapes
-- For jackets: Look at zipper style, collar type, pocket placement, and brand tags
-- For hats/caps: Look at crown shape, bill curve, logo/embroidery, and construction
-- For jeans: Look at wash, distressing, rise, leg shape, and back pocket stitching
+1. **name**: Descriptive product name in retail format: "[Brand] [Gender] [Color] [Product Type] [Key Detail]"
+   Examples: "Nike Womens White Air Force 1 Low Sneakers", "Zara Black Leather Crossbody Bag", "Levi's Mens Blue 501 Original Jeans"
 
-IMPORTANT:
+2. **exactModel**: Specific model/SKU if identifiable (e.g., "CW2288-111"). null if unknown.
+
+3. **brand**: Brand name. Look for:
+   - Visible logos, swooshes, stripes, monograms
+   - Distinctive silhouettes (Adidas Superstar shell toe, Converse Chuck Taylor toe cap)
+   - Signature design elements (Burberry check, Louis Vuitton monogram)
+   - null ONLY if truly unidentifiable
+
+4. **category**: One of: top, shirt, tshirt, sweater, hoodie, cardigan, pants, jeans, shorts, skirt, leggings, dress, jumpsuit, jacket, coat, blazer, vest, parka, sneakers, boots, heels, sandals, loafers, flats, hat, cap, sunglasses, watch, belt, scarf, bag, backpack, crossbody, tote, clutch, necklace, bracelet, earrings, ring, accessory, other
+
+5. **color**: Primary color(s). Be specific:
+   - Use exact colorway names if known: "Triple White", "Bred", "University Blue"
+   - Otherwise describe: "Navy Blue", "Cream/Off-White", "Black with White Accents"
+
+6. **material**: Primary material: "leather", "suede", "denim", "cotton", "polyester", "canvas", "nylon", "wool", "silk", "linen", "synthetic", etc.
+
+7. **description**: Key identifying features for search matching:
+   - Fit: slim, regular, oversized, cropped
+   - Style: casual, formal, sporty, streetwear
+   - Details: logo placement, pattern, hardware color, closure type
+   Format: "Brand: [X], Type: [Y], Color: [Z], Style: [W]" when possible
+
+8. **confidence**: 0-100 (how confident in exact identification, not just category)
+
+9. **isHighlighted**: true only for user-highlighted item, false otherwise
+
+10. **searchQuery**: CRITICAL - Optimized search query for finding this product. Format:
+    "[Brand] [Color] [Product Type] [Gender if apparent] [Key distinguishing words]"
+    Examples:
+    - "Nike Air Force 1 White Low Mens Sneakers"
+    - "Black Leather Crossbody Bag Gold Hardware"
+    - "Adidas Originals Samba White Gum Women"
+    - "Blue Denim Jacket Oversized Vintage Wash"
+
+## IDENTIFICATION TIPS
+- **Sneakers**: Sole shape, toe box style, midsole profile, heel tab, lacing, logos/swoosh/stripes placement
+- **Bags**: Hardware color (gold/silver), strap style, closure type, logo placement, shape
+- **Jackets**: Collar type, zipper style, pocket design, length, brand tags
+- **Jeans**: Wash (light/medium/dark), distressing, rise (high/mid/low), leg shape, pocket stitching
+- **Dresses**: Silhouette (bodycon/shift/A-line), length (mini/midi/maxi), neckline, sleeve type
+- **Watches**: Case shape, band material, dial color, brand markers
+- **Sunglasses**: Frame shape (aviator/wayfarer/round/cat-eye), temple design, logo placement
+
+## RULES
 ${highlightInstructions}
-- Include ALL visible fashion items
-- Be as SPECIFIC as possible — "Nike Air Max 90 Essential White/Black" is better than "White Nike Sneakers"
-- The searchQuery should be optimized for retail product search
-- If you recognize a specific collection or season (e.g. "FW24", "Spring 2024"), include it
+- List EVERY visible fashion item - do not skip anything
+- Include items even if only partially visible
+- Be SPECIFIC: "Adidas Stan Smith White Green" not "white sneakers"
+- For unknown brands, still describe fully: "White Canvas Low Top Sneakers with Gum Sole"
+- Gender: Include "Mens", "Womens", or "Unisex" in searchQuery when apparent
 
-Respond with ONLY a JSON array, no markdown, no explanation:
-[{"name":"...","exactModel":"...","brand":"...","category":"...","color":"...","material":"...","description":"...","confidence":85,"isHighlighted":false,"searchQuery":"..."}, ...]`;
+Respond with ONLY a valid JSON array, no markdown, no explanation:
+[{"name":"...","exactModel":null,"brand":"...","category":"...","color":"...","material":"...","description":"...","confidence":85,"isHighlighted":false,"searchQuery":"..."}, ...]`;
 
   // Strip the data:image/jpeg;base64, prefix if present
   const base64Data = frameImageBase64.includes(",")
@@ -184,14 +299,15 @@ Respond with ONLY a JSON array, no markdown, no explanation:
   });
 
   // Convert to Product type (without listing data — that's added later in the pipeline)
+  // imageUrl is empty placeholder - will be replaced by provider with actual product image
   return detected.map((item) => ({
     id: uuidv4(),
     name: item.name,
     brand: item.brand ?? "Unknown",
     category: mapCategory(item.category),
-    imageUrl: `https://picsum.photos/seed/${uuidv4().slice(0, 8)}/400/500`,
+    imageUrl: "", // Placeholder - replaced by Awin product image
     price: 0,
-    currency: "CAD",
+    currency: "USD",
     shopUrl: "#",
     retailer: "Searching retailers...",
     confidence: mapConfidence(item.confidence),

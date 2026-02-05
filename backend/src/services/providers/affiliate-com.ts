@@ -1,11 +1,18 @@
 import type { Product, ProductCategory } from "@spotthisfit/shared";
 import type {
   ProductProvider,
+  ProductSearchOptions,
+  ProductSuggestionResult,
   AffiliateComConfig,
   AffiliateComRequestBody,
   AffiliateComResponse,
   AffiliateComProduct,
 } from "./types.js";
+import {
+  buildSeedProduct,
+  scoreListingMatch,
+  isStrongMatch,
+} from "./match-utils.js";
 
 // ── Config ─────────────────────────────────────────────────────────
 
@@ -247,10 +254,14 @@ function mapToProduct(
 
 async function searchProducts(
   query: string,
-  cfg: AffiliateComConfig
+  cfg: AffiliateComConfig,
+  options?: { limit?: number; page?: number }
 ): Promise<AffiliateComProduct[]> {
+  const limit = options?.limit ?? 8;
+  const page = options?.page;
   const body: AffiliateComRequestBody = {
-    per_page: 5,
+    per_page: limit,
+    page,
     sort_by: "final_price",
     sort_order: "asc",
     networks: {
@@ -306,36 +317,24 @@ function pickBestMatch(
   if (listings.length === 0) return null;
   if (listings.length === 1) return listings[0];
 
-  const aiBrand = aiProduct.brand.toLowerCase();
-  const aiName = aiProduct.name.toLowerCase();
-
   let best = listings[0];
-  let bestScore = 0;
+  let bestScore = -1;
 
   for (const listing of listings) {
-    let score = 0;
-    const listBrand = (listing.brand ?? "").toLowerCase();
-    const listName = listing.name.toLowerCase();
-
-    // Brand match
-    if (listBrand && aiBrand !== "unknown" && listBrand.includes(aiBrand)) {
-      score += 3;
-    }
-
-    // Name word overlap
-    const aiWords = aiName.split(/\s+/);
-    const matchingWords = aiWords.filter((w) =>
-      w.length > 2 && listName.includes(w)
-    );
-    score += matchingWords.length;
-
+    const score = scoreListingMatch(aiProduct, {
+      name: listing.name,
+      brand: listing.brand,
+      description: listing.description,
+      color: listing.color,
+      model: listing.model,
+    });
     if (score > bestScore) {
       bestScore = score;
       best = listing;
     }
   }
 
-  return best;
+  return isStrongMatch(bestScore) ? best : null;
 }
 
 // ── Provider implementation ────────────────────────────────────────
@@ -348,7 +347,12 @@ export class AffiliateComProvider implements ProductProvider {
     const cfg = loadConfig();
 
     for (const product of products) {
-      const query = product.searchQuery ?? `${product.brand} ${product.name}`;
+      const baseQuery =
+        product.searchQuery ?? `${product.brand} ${product.name}`;
+      const query =
+        product.exactModel && !baseQuery.includes(product.exactModel)
+          ? `${baseQuery} ${product.exactModel}`
+          : baseQuery;
 
       try {
         let listing: AffiliateComProduct | null;
@@ -385,5 +389,46 @@ export class AffiliateComProvider implements ProductProvider {
         yield { ...product, retailer: "Search failed" };
       }
     }
+  }
+
+  async searchSuggestions(
+    query: string,
+    { limit, offset = 0 }: ProductSearchOptions
+  ): Promise<ProductSuggestionResult> {
+    const cfg = loadConfig();
+    const mock = isMockMode();
+
+    if (mock) {
+      const products = Array.from({ length: limit }, (_, index) => {
+        const seed = buildSeedProduct(query);
+        const listing = generateMockListing(seed);
+        return mapToProduct(listing, {
+          ...seed,
+          id: `${seed.id}-${offset + index}`,
+        });
+      });
+      return {
+        products,
+        nextOffset: offset + products.length,
+      };
+    }
+
+    const page = Math.floor(offset / limit) + 1;
+    const results = await searchProducts(query, cfg, { limit, page });
+
+    const products = results.map((listing) => {
+      const seed = buildSeedProduct(query, {
+        id: listing.id,
+        name: listing.name,
+        brand: listing.brand ?? "Unknown",
+        currency: listing.currency ?? "USD",
+      });
+      return mapToProduct(listing, seed);
+    });
+
+    return {
+      products,
+      nextOffset: products.length === limit ? offset + products.length : null,
+    };
   }
 }

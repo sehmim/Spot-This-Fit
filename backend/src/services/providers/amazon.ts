@@ -1,5 +1,10 @@
 import type { Product, ProductCategory } from "@spotthisfit/shared";
-import type { ProductProvider } from "./types.js";
+import type {
+  ProductProvider,
+  ProductSearchOptions,
+  ProductSuggestionResult,
+} from "./types.js";
+import { buildSeedProduct } from "./match-utils.js";
 
 const AMAZON_ASSOCIATE_TAG =
   process.env.AMAZON_ASSOCIATE_TAG ?? "checkthisfit-20";
@@ -42,5 +47,32 @@ export class AmazonProvider implements ProductProvider {
         retailer: "Amazon.ca",
       };
     }
+  }
+
+  async searchSuggestions(
+    query: string,
+    { offset = 0 }: ProductSearchOptions
+  ): Promise<ProductSuggestionResult> {
+    if (offset > 0) {
+      return { products: [], nextOffset: null };
+    }
+
+    const seed = buildSeedProduct(query, {
+      name: query,
+      brand: "Amazon",
+      retailer: "Amazon.ca",
+    });
+    const affiliateUrl = buildAffiliateUrl(seed);
+
+    return {
+      products: [
+        {
+          ...seed,
+          shopUrl: affiliateUrl,
+          affiliateUrl,
+        },
+      ],
+      nextOffset: null,
+    };
   }
 }

@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createSearch,
   searchCjProducts,
+  searchAwinProducts,
   getSearchStatus,
   getSearchResults,
   createFrameSearch,
@@ -13,6 +14,7 @@ const router = Router();
 // Existing routes
 router.post("/", createSearch);
 router.get("/", searchCjProducts);
+router.get("/awin", searchAwinProducts);
 router.get("/:searchId/status", getSearchStatus);
 router.get("/:searchId/results", getSearchResults);
 

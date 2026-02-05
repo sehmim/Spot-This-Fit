@@ -21,6 +21,7 @@ import type {
   CjProduct,
   CjProductsResult,
 } from "../services/providers/types.js";
+import { AwinProductStore } from "../services/providers/awin-product-store.js";
 
 interface SearchSession {
   request: SearchRequest;
@@ -187,6 +188,94 @@ function parseEnum(
   if (!raw) return undefined;
   const normalized = raw.toUpperCase();
   return allowed.includes(normalized) ? normalized : undefined;
+}
+
+export async function searchAwinProducts(req: Request, res: Response) {
+  const query = getQueryString(req.query.q) ?? getQueryString(req.query.query);
+  const limit = parseNumber(req.query.limit) ?? 20;
+
+  if (!query) {
+    const error: ApiError = {
+      success: false,
+      error: {
+        code: "INVALID_REQUEST",
+        message: "Provide a query via ?q=",
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(400).json(error);
+    return;
+  }
+
+  if (!process.env.DATABASE_URL) {
+    const mockResults = Array.from({ length: Math.min(limit, 5) }, (_, i) => ({
+      product: {
+        aw_product_id: `mock_${i}`,
+        product_name: `Mock Product ${i + 1} for "${query}"`,
+        search_price: (50 + Math.random() * 100).toFixed(2),
+        store_price: (80 + Math.random() * 100).toFixed(2),
+        currency: "USD",
+        merchant_name: "Mock Merchant",
+        aw_deep_link: `https://mock.awin.com/${i}`,
+        merchant_deep_link: `https://mock.merchant.com/${i}`,
+        description: `Brand: Mock Brand, Type: Mock, ${query}`,
+        aw_image_url: "https://via.placeholder.com/400",
+        category_name: "mock",
+      },
+      score: 5 - i * 0.5,
+      feedId: "mock",
+    }));
+
+    const payload: ApiResponse<{
+      products: typeof mockResults;
+      totalCount: number;
+      source: string;
+    }> = {
+      success: true,
+      data: {
+        products: mockResults,
+        totalCount: mockResults.length,
+        source: "mock",
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json(payload);
+    return;
+  }
+
+  try {
+    const store = new AwinProductStore();
+    const results = await store.searchProducts(query, limit);
+    const stats = await store.getStats();
+
+    const payload: ApiResponse<{
+      products: typeof results;
+      totalCount: number;
+      stats: typeof stats;
+    }> = {
+      success: true,
+      data: {
+        products: results,
+        totalCount: results.length,
+        stats,
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json(payload);
+  } catch (err) {
+    const error: ApiError = {
+      success: false,
+      error: {
+        code: "AWIN_ERROR",
+        message: "Failed to search Awin products",
+        details: { error: String(err) },
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(500).json(error);
+  }
 }
 
 export async function searchCjProducts(req: Request, res: Response) {

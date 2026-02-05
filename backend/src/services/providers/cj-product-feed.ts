@@ -1,11 +1,18 @@
 import type { Product } from "@spotthisfit/shared";
 import type {
   ProductProvider,
+  ProductSearchOptions,
+  ProductSuggestionResult,
   CjConfig,
   CjGraphQlResponse,
   CjProduct,
   CjProductsResult,
 } from "./types.js";
+import {
+  buildSeedProduct,
+  scoreListingMatch,
+  isStrongMatch,
+} from "./match-utils.js";
 
 const CJ_QUERY_WITH_SORT = `
   query Products(
@@ -266,12 +273,16 @@ function mapToProduct(
 
 async function searchProducts(
   query: string,
-  cfg: CjConfig
-): Promise<CjProduct[]> {
+  cfg: CjConfig,
+  options?: { limit?: number; offset?: number }
+): Promise<CjProductsResult> {
+  const limit = options?.limit ?? cfg.limit;
+  const offset = options?.offset ?? 0;
   const variables: {
     companyId: string;
     keywords: string[];
     limit: number;
+    offset?: number;
     partnerStatus: CjConfig["partnerStatus"];
     availability: CjConfig["availability"];
     advertiserCountries?: string[];
@@ -281,7 +292,8 @@ async function searchProducts(
   } = {
     companyId: cfg.companyId,
     keywords: [query],
-    limit: cfg.limit,
+    limit,
+    offset,
     partnerStatus: cfg.partnerStatus,
     availability: cfg.availability,
     advertiserCountries: cfg.advertiserCountries,
@@ -324,7 +336,15 @@ async function searchProducts(
     throw new Error(`CJ Product Feed API error: ${message}`);
   }
 
-  return json.data?.products?.resultList ?? [];
+  return (
+    json.data?.products ?? {
+      resultList: [],
+      totalCount: 0,
+      limit,
+      count: 0,
+      nextPage: null,
+    }
+  );
 }
 
 function pickBestMatch(
@@ -334,34 +354,22 @@ function pickBestMatch(
   if (listings.length === 0) return null;
   if (listings.length === 1) return listings[0];
 
-  const aiBrand = aiProduct.brand.toLowerCase();
-  const aiName = aiProduct.name.toLowerCase();
-
   let best = listings[0];
   let bestScore = -1;
 
   for (const listing of listings) {
-    let score = 0;
-    const listBrand = (listing.brand ?? "").toLowerCase();
-    const listName = (listing.title ?? "").toLowerCase();
-
-    if (listBrand && aiBrand !== "unknown" && listBrand.includes(aiBrand)) {
-      score += 3;
-    }
-
-    const aiWords = aiName.split(/\s+/);
-    const matchingWords = aiWords.filter(
-      (word) => word.length > 2 && listName.includes(word)
-    );
-    score += matchingWords.length;
-
+    const score = scoreListingMatch(aiProduct, {
+      name: listing.title,
+      brand: listing.brand,
+      description: listing.description,
+    });
     if (score > bestScore) {
       bestScore = score;
       best = listing;
     }
   }
 
-  return best;
+  return isStrongMatch(bestScore) ? best : null;
 }
 
 export class CjProductFeedProvider implements ProductProvider {
@@ -381,13 +389,18 @@ export class CjProductFeedProvider implements ProductProvider {
     }
 
     for (const product of products) {
-      const query = product.searchQuery ?? `${product.brand} ${product.name}`;
+      const baseQuery =
+        product.searchQuery ?? `${product.brand} ${product.name}`;
+      const query =
+        product.exactModel && !baseQuery.includes(product.exactModel)
+          ? `${baseQuery} ${product.exactModel}`
+          : baseQuery;
 
       try {
-        const results = await searchProducts(query, cfg);
-        const listing = pickBestMatch(results, product);
+        const result = await searchProducts(query, cfg);
+        const listing = pickBestMatch(result.resultList, product);
         console.log(
-          `[cj-product-feed] Found ${results.length} results for "${query}"`
+          `[cj-product-feed] Found ${result.resultList.length} results for "${query}"`
         );
 
         if (listing) {
@@ -403,5 +416,42 @@ export class CjProductFeedProvider implements ProductProvider {
         yield { ...product, retailer: "Search failed" };
       }
     }
+  }
+
+  async searchSuggestions(
+    query: string,
+    { limit, offset = 0 }: ProductSearchOptions
+  ): Promise<ProductSuggestionResult> {
+    const cfg = loadConfig();
+
+    if (!cfg.token || !cfg.companyId) {
+      return {
+        products: [],
+        nextOffset: null,
+      };
+    }
+
+    const result = await searchProducts(query, cfg, { limit, offset });
+    const products = result.resultList.map((listing) => {
+      const seed = buildSeedProduct(query, {
+        id: listing.id,
+        name: listing.title ?? query,
+        brand: listing.brand ?? "Unknown",
+        currency:
+          listing.salePrice?.currency ??
+          listing.price?.currency ??
+          "USD",
+      });
+      return mapToProduct(listing, seed, cfg);
+    });
+
+    return {
+      products,
+      totalCount: result.totalCount,
+      nextOffset:
+        offset + result.count < result.totalCount
+          ? offset + result.count
+          : null,
+    };
   }
 }

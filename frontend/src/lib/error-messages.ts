@@ -9,6 +9,11 @@ type Translator = (
 const ERROR_CODE_TO_KEY: Record<string, TranslationKey> = {
   MISSING_URL: "errors.missingUrl",
   INVALID_URL: "errors.invalidUrl",
+  REELS_ONLY: "errors.reelsOnly",
+  UNSUPPORTED_PLATFORM: "errors.invalidUrl",
+  VIDEO_TOO_LONG: "errors.videoTooLong",
+  DOWNLOAD_FAILED: "errors.downloadFailed",
+  APIFY_NOT_CONFIGURED: "errors.internalError",
   INVALID_REQUEST: "errors.invalidRequest",
   NOT_FOUND: "errors.notFound",
   INVALID_EMAIL: "errors.invalidEmail",

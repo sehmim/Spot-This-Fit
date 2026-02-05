@@ -7,9 +7,10 @@ import { useResultsStore } from "@/stores/results-store";
 import { apiClient } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { PageTransition } from "@/components/layout/page-transition";
 import { Loader2, ImagePlus, X, Link2, Clock } from "lucide-react";
-import type { ApiResponse } from "@spotthisfit/shared";
+import type { ApiResponse, VideoDownloadResponse } from "@spotthisfit/shared";
 import { useTranslations } from "@/components/i18n/locale-provider";
 import { getErrorMessage } from "@/lib/error-messages";
 
@@ -18,6 +19,11 @@ export default function SearchPage() {
   const router = useRouter();
   const setSearchId = useSearchStore((s) => s.setSearchId);
   const setSelectedFrame = useSearchStore((s) => s.setSelectedFrame);
+  const inputUrl = useSearchStore((s) => s.inputUrl);
+  const setInputUrl = useSearchStore((s) => s.setInputUrl);
+  const setDownloadedVideoUrl = useSearchStore(
+    (s) => s.setDownloadedVideoUrl
+  );
   const resetStream = useResultsStore((s) => s.resetStream);
 
   // Image upload state
@@ -26,6 +32,9 @@ export default function SearchPage() {
   const [uploadFileName, setUploadFileName] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState(inputUrl);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -67,6 +76,31 @@ export default function SearchPage() {
         getErrorMessage(err, t, { fallbackKey: "search.upload.error" })
       );
       setIsUploading(false);
+    }
+  };
+
+  const handleVideoSearch = async () => {
+    if (!videoUrl.trim()) {
+      setDownloadError(t("errors.missingUrl"));
+      return;
+    }
+
+    setIsDownloading(true);
+    setDownloadError(null);
+
+    try {
+      const res = await apiClient.post<ApiResponse<VideoDownloadResponse>>(
+        "/api/video/download",
+        { url: videoUrl.trim() }
+      );
+      setInputUrl(videoUrl.trim());
+      setDownloadedVideoUrl(res.data.videoUrl);
+      router.push("/search/frame");
+    } catch (err) {
+      setDownloadError(
+        getErrorMessage(err, t, { fallbackKey: "errors.downloadFailed" })
+      );
+      setIsDownloading(false);
     }
   };
 
@@ -169,30 +203,48 @@ export default function SearchPage() {
           <div className="h-px flex-1 bg-border" />
         </div>
 
-        {/* Video URL — disabled / Coming Soon */}
-        <div className="relative flex flex-col gap-4 rounded-lg border bg-muted/10 p-4 opacity-50">
+        {/* Video URL */}
+        <div className="relative flex flex-col gap-4 rounded-lg border bg-muted/10 p-4">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-muted-foreground">
               {t("search.form.videoUrlLabel")}
             </label>
             <Badge variant="outline" className="gap-1 text-xs">
               <Clock className="size-3" />
-              {t("search.video.comingSoon")}
+              {t("search.form.durationLimit")}
             </Badge>
           </div>
           <div className="relative">
-            <div className="flex h-11 w-full items-center rounded-md border bg-background/50 pl-10 text-sm text-muted-foreground">
-              {t("search.form.placeholder")}
-            </div>
+            <Input
+              value={videoUrl}
+              onChange={(e) => {
+                setVideoUrl(e.target.value);
+                setInputUrl(e.target.value);
+                if (downloadError) setDownloadError(null);
+              }}
+              placeholder={t("search.form.placeholder")}
+              className="h-11 pl-10"
+            />
             <Link2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           </div>
+          {downloadError && (
+            <p className="text-sm text-destructive">{downloadError}</p>
+          )}
           <Button
             type="button"
             size="lg"
             className="h-12 w-full text-base"
-            disabled
+            disabled={isDownloading || !videoUrl.trim()}
+            onClick={handleVideoSearch}
           >
-            {t("search.form.next")}
+            {isDownloading ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                {t("search.form.downloadingButton")}
+              </>
+            ) : (
+              t("search.form.next")
+            )}
           </Button>
         </div>
       </div>
