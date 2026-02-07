@@ -6,3 +6,4 @@ Pillow>=10.0.0
 requests>=2.31.0
 psycopg2-binary>=2.9.9
 numpy>=1.26.0
+pinecone>=5.0.0

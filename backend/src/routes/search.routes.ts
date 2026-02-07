@@ -8,6 +8,7 @@ import {
   getSearchResults,
   createFrameSearch,
   streamSearchResults,
+  imageSearch,
 } from "../controllers/search.controller.js";
 
 const router = Router();
@@ -23,5 +24,8 @@ router.get("/:searchId/results", getSearchResults);
 // New routes for frame-based search
 router.post("/frame", createFrameSearch);
 router.get("/:searchId/stream", streamSearchResults);
+
+// Pinecone image search
+router.post("/image", imageSearch);
 
 export { router as searchRoutes };

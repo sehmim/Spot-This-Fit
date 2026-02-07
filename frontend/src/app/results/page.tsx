@@ -22,7 +22,7 @@ import type { Product, ApiResponse } from "@spotthisfit/shared";
 
 const MIN_MAIN_PRODUCTS = 4;
 const SUGGESTION_PAGE_SIZE = 24;
-const IMAGE_HEIGHT_CLASS = "h-[260px] sm:h-[300px] md:h-[320px]";
+const IMAGE_HEIGHT_CLASS = "h-[180px] sm:h-[260px] md:h-[300px] lg:h-[320px]";
 
 type SuggestionResponse = ApiResponse<{
   products: Product[];
@@ -76,29 +76,29 @@ function SimilarProductCard({
             </span>
           )}
         </div>
-        <CardContent className="flex flex-col gap-2 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
+        <CardContent className="flex flex-col gap-1.5 p-2 sm:gap-2 sm:p-3">
+          <div className="flex items-center justify-between gap-1">
+            <p className="truncate text-[9px] uppercase tracking-wide text-muted-foreground sm:text-[10px]">
               {product.brand}
             </p>
-            <span className="truncate text-[10px] text-muted-foreground">
+            <span className="hidden truncate text-[10px] text-muted-foreground sm:inline">
               {product.retailer}
             </span>
           </div>
-          <h3 className="line-clamp-2 text-sm font-semibold leading-tight">
+          <h3 className="line-clamp-2 text-xs font-semibold leading-tight sm:text-sm">
             {product.name}
           </h3>
-          <div className="flex items-baseline justify-between gap-2">
+          <div className="flex items-baseline justify-between gap-1">
             <span
               className={cn(
-                "text-sm font-semibold",
+                "text-xs font-semibold sm:text-sm",
                 product.price <= 0 && "text-muted-foreground",
               )}
             >
               {priceLabel}
             </span>
             {originalLabel && (
-              <span className="text-[10px] text-muted-foreground line-through">
+              <span className="text-[9px] text-muted-foreground line-through sm:text-[10px]">
                 {originalLabel}
               </span>
             )}
@@ -145,20 +145,31 @@ export default function ResultsPage() {
   const router = useRouter();
   const t = useTranslations();
 
+  // Direct results from Pinecone image search (no streaming)
+  const directProducts = useResultsStore((s) => s.streamedProducts);
+  const directComplete = useResultsStore((s) => s.streamComplete);
+
+  const hasDirectResults = !searchId && directProducts.length > 0;
+
   useEffect(() => {
-    if (!searchId) {
+    if (!searchId && !hasDirectResults) {
       router.replace("/");
     }
-  }, [searchId, router]);
+  }, [searchId, hasDirectResults, router]);
 
-  const {
-    products,
-    isStreaming,
-    streamStatus,
-    retailersSearched,
-    streamComplete,
-    error,
-  } = useProductStream(searchId);
+  const stream = useProductStream(searchId);
+
+  // Use direct results if no searchId, otherwise use stream
+  const products = hasDirectResults ? directProducts : stream.products;
+  const isStreaming = hasDirectResults ? false : stream.isStreaming;
+  const streamStatus = hasDirectResults
+    ? `Found ${directProducts.length} similar products`
+    : stream.streamStatus;
+  const retailersSearched = hasDirectResults
+    ? directProducts.length
+    : stream.retailersSearched;
+  const streamComplete = hasDirectResults ? true : stream.streamComplete;
+  const error = hasDirectResults ? null : stream.error;
 
   const handleDrawerOpenChange = useCallback(
     (open: boolean) => {
@@ -267,13 +278,42 @@ export default function ResultsPage() {
     return () => observer.disconnect();
   }, [fetchSuggestions]);
 
-  if (!searchId) return null;
+  if (!searchId && !hasDirectResults) return null;
 
   return (
     <PageTransition>
-      <div className="px-4 py-6 sm:px-6 lg:mx-auto lg:max-w-6xl">
+      <div className="px-3 py-4 sm:px-6 sm:py-6 lg:mx-auto lg:max-w-6xl">
+        {/* Mobile: compact header with source image + status */}
+        <div className="mb-4 flex items-center gap-3 lg:hidden">
+          {sourceImage && (
+            <div className="size-14 shrink-0 overflow-hidden rounded-lg border bg-muted/30">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={sourceImage}
+                alt="Source"
+                className="h-full w-full object-cover"
+              />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <SearchStatus
+              status={streamStatus}
+              isStreaming={isStreaming}
+              retailersSearched={retailersSearched}
+              streamComplete={streamComplete}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/5 p-3 lg:hidden">
+            <p className="text-sm font-medium text-destructive">{error}</p>
+          </div>
+        )}
+
         <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-          <aside className="flex flex-col gap-4">
+          {/* Desktop sidebar — hidden on mobile */}
+          <aside className="hidden lg:flex lg:flex-col lg:gap-4">
             <SearchStatus
               status={streamStatus}
               isStreaming={isStreaming}
@@ -333,33 +373,29 @@ export default function ResultsPage() {
             </div>
           </aside>
 
-          <main className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h1 className="text-xl font-semibold">
+          {/* Main product grid */}
+          <main className="flex flex-col gap-3 sm:gap-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h1 className="text-lg font-semibold sm:text-xl">
                   {t("results.similarProducts.title")}
                 </h1>
-                <p className="text-xs text-muted-foreground">
+                <p className="hidden text-xs text-muted-foreground sm:block">
                   {t("results.similarProducts.subtitle")}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground">
-                  {t("results.sort")}
-                </label>
-                <select
-                  className="rounded-md border bg-transparent px-2 py-1 text-xs"
-                  value={sortBy}
-                  onChange={(event) => setSortBy(event.target.value)}
-                >
-                  <option value="relevance">{t("results.sortRelevance")}</option>
-                  <option value="price_asc">{t("results.sortPriceLow")}</option>
-                  <option value="price_desc">{t("results.sortPriceHigh")}</option>
-                </select>
-              </div>
+              <select
+                className="shrink-0 rounded-md border bg-transparent px-2 py-1 text-xs"
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+              >
+                <option value="relevance">{t("results.sortRelevance")}</option>
+                <option value="price_asc">{t("results.sortPriceLow")}</option>
+                <option value="price_desc">{t("results.sortPriceHigh")}</option>
+              </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-4">
               {sortedProducts.map((product, index) => (
                 <SimilarProductCard
                   key={product.id}
@@ -384,7 +420,7 @@ export default function ResultsPage() {
             <div ref={suggestionAnchorRef} />
 
             {streamComplete && products.length > 0 && (
-              <div className="mt-6 flex flex-col gap-3">
+              <div className="mt-4 flex flex-col gap-3 sm:mt-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
                   <SaveAllButton />
                   <ShareButton />
@@ -402,11 +438,10 @@ export default function ResultsPage() {
         onOpenChange={handleDrawerOpenChange}
       />
 
-      {/* Source image preview thumbnail */}
+      {/* Floating source image preview — mobile only */}
       {sourceImage && (
         <div className="fixed bottom-4 right-4 z-40 lg:hidden">
           {previewDismissed ? (
-            /* Collapsed bubble to reopen */
             <button
               type="button"
               onClick={() => setPreviewDismissed(false)}
@@ -415,10 +450,9 @@ export default function ResultsPage() {
               <ImageIcon className="size-4 text-muted-foreground" />
             </button>
           ) : (
-            /* Expanded preview */
             <div
               className="relative overflow-hidden rounded-lg border bg-card shadow-lg transition-all duration-200"
-              style={{ width: previewExpanded ? 200 : 100, height: previewExpanded ? 400 : 200 }}
+              style={{ width: previewExpanded ? 160 : 72, height: previewExpanded ? 280 : 72 }}
             >
               <button
                 type="button"

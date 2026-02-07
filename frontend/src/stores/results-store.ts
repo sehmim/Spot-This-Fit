@@ -17,6 +17,7 @@ interface ResultsState {
   setStreamComplete: (v: boolean) => void;
   setError: (err: string | null) => void;
   setSelectedProduct: (p: Product | null) => void;
+  setProducts: (products: Product[]) => void;
   resetStream: () => void;
 }
 
@@ -37,6 +38,15 @@ export const useResultsStore = create<ResultsState>((set) => ({
   setStreamComplete: (v) => set({ streamComplete: v }),
   setError: (err) => set({ error: err }),
   setSelectedProduct: (p) => set({ selectedProduct: p }),
+  setProducts: (products) =>
+    set({
+      streamedProducts: products,
+      isStreaming: false,
+      streamComplete: true,
+      streamStatus: `Found ${products.length} similar products`,
+      retailersSearched: products.length,
+      error: null,
+    }),
   resetStream: () =>
     set({
       streamedProducts: [],

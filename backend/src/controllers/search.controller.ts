@@ -23,6 +23,11 @@ import type {
 } from "../services/providers/types.js";
 import { AwinProductStore } from "../services/providers/awin-product-store.js";
 import { buildSeedProduct } from "../services/providers/match-utils.js";
+import { getImageEmbedding } from "../services/clip.js";
+import {
+  searchPineconeByImage,
+  pineconeEnabled,
+} from "../services/providers/pinecone-store.js";
 
 interface SearchSession {
   request: SearchRequest;
@@ -835,4 +840,66 @@ export async function streamSearchResults(req: Request, res: Response) {
   res.write(`event: complete\ndata: ${JSON.stringify(completeEvent)}\n\n`);
 
   res.end();
+}
+
+// --- Pinecone image search (direct, no SSE) ---
+
+export async function imageSearch(req: Request, res: Response) {
+  const { image } = req.body as { image?: string };
+
+  if (!image) {
+    const error: ApiError = {
+      success: false,
+      error: {
+        code: "INVALID_REQUEST",
+        message: "Provide a base64 image via 'image' field",
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(400).json(error);
+    return;
+  }
+
+  if (!pineconeEnabled()) {
+    const error: ApiError = {
+      success: false,
+      error: {
+        code: "CONFIG_MISSING",
+        message: "PINECONE_API_KEY is not configured",
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(500).json(error);
+    return;
+  }
+
+  try {
+    console.log("[ImageSearch] Generating CLIP embedding...");
+    const embedding = await getImageEmbedding(image);
+
+    console.log("[ImageSearch] Querying Pinecone...");
+    const products = await searchPineconeByImage(embedding, 20);
+
+    console.log(`[ImageSearch] Found ${products.length} results`);
+
+    const payload: ApiResponse<{ products: typeof products }> = {
+      success: true,
+      data: { products },
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json(payload);
+  } catch (err) {
+    console.error("[ImageSearch] Error:", err);
+    const error: ApiError = {
+      success: false,
+      error: {
+        code: "IMAGE_SEARCH_ERROR",
+        message: "Image search failed",
+        details: { error: String(err) },
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(500).json(error);
+  }
 }

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageTransition } from "@/components/layout/page-transition";
 import { Loader2, ImagePlus, X, Link2, Clock } from "lucide-react";
-import type { ApiResponse, VideoDownloadResponse } from "@spotthisfit/shared";
+import type { ApiResponse, VideoDownloadResponse, Product } from "@spotthisfit/shared";
 import { useTranslations } from "@/components/i18n/locale-provider";
 import { getErrorMessage } from "@/lib/error-messages";
 
@@ -57,6 +57,8 @@ export default function SearchPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
+  const setProducts = useResultsStore((s) => s.setProducts);
+
   const handleImageSearch = async () => {
     if (!uploadedImage) return;
     setIsUploading(true);
@@ -64,12 +66,12 @@ export default function SearchPage() {
     resetStream();
 
     try {
-      const res = await apiClient.post<ApiResponse<{ searchId: string }>>(
-        "/api/search/frame",
-        { frameImage: uploadedImage }
+      const res = await apiClient.post<ApiResponse<{ products: Product[] }>>(
+        "/api/search/image",
+        { image: uploadedImage }
       );
       setSelectedFrame(uploadedImage);
-      setSearchId(res.data.searchId);
+      setProducts(res.data.products);
       router.push("/results");
     } catch (err) {
       setUploadError(
@@ -203,48 +205,31 @@ export default function SearchPage() {
           <div className="h-px flex-1 bg-border" />
         </div>
 
-        {/* Video URL */}
-        <div className="relative flex flex-col gap-4 rounded-lg border bg-muted/10 p-4">
+        {/* Video URL — coming soon */}
+        <div className="relative flex flex-col gap-4 rounded-lg border bg-muted/10 p-4 opacity-60">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-muted-foreground">
               {t("search.form.videoUrlLabel")}
             </label>
             <Badge variant="outline" className="gap-1 text-xs">
-              <Clock className="size-3" />
-              {t("search.form.durationLimit")}
+              Coming soon...
             </Badge>
           </div>
           <div className="relative">
             <Input
-              value={videoUrl}
-              onChange={(e) => {
-                setVideoUrl(e.target.value);
-                setInputUrl(e.target.value);
-                if (downloadError) setDownloadError(null);
-              }}
+              disabled
               placeholder={t("search.form.placeholder")}
               className="h-11 pl-10"
             />
             <Link2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           </div>
-          {downloadError && (
-            <p className="text-sm text-destructive">{downloadError}</p>
-          )}
           <Button
             type="button"
             size="lg"
             className="h-12 w-full text-base"
-            disabled={isDownloading || !videoUrl.trim()}
-            onClick={handleVideoSearch}
+            disabled
           >
-            {isDownloading ? (
-              <>
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                {t("search.form.downloadingButton")}
-              </>
-            ) : (
-              t("search.form.next")
-            )}
+            {t("search.form.next")}
           </Button>
         </div>
       </div>
