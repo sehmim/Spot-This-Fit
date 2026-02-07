@@ -125,7 +125,8 @@ export async function downloadVideoToDisk(sourceUrl: string) {
     throw new Error("DOWNLOAD_FAILED");
   }
 
-  const bodyStream = Readable.fromWeb(response.body as ReadableStream);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bodyStream = Readable.fromWeb(response.body as any);
   await pipeline(bodyStream, createWriteStream(filePath));
 
   console.info("[apify] Video written to disk", { filePath });

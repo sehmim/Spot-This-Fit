@@ -155,30 +155,29 @@ const CJ_PRODUCTS_QUERY_NO_SORT = `
   }
 `;
 
-function getQueryString(
-  value: string | string[] | undefined
-): string | undefined {
-  if (Array.isArray(value)) return value[0];
-  return value;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type QueryValue = any;
+
+function getQueryString(value: QueryValue): string | undefined {
+  if (Array.isArray(value)) return String(value[0]);
+  if (typeof value === "string") return value;
+  return undefined;
 }
 
-function parseNumber(
-  value: string | string[] | undefined
-): number | undefined {
+function parseNumber(value: QueryValue): number | undefined {
   const raw = getQueryString(value);
   if (!raw) return undefined;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function parseList(
-  value: string | string[] | undefined
-): string[] | undefined {
+function parseList(value: QueryValue): string[] | undefined {
   if (!value) return undefined;
   if (Array.isArray(value)) {
-    const items = value.map((item) => item.trim()).filter(Boolean);
+    const items = value.map((item: unknown) => String(item).trim()).filter(Boolean);
     return items.length ? items : undefined;
   }
+  if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   if (!trimmed.includes(",")) return [trimmed];
@@ -187,7 +186,7 @@ function parseList(
 }
 
 function parseEnum(
-  value: string | string[] | undefined,
+  value: QueryValue,
   allowed: string[]
 ): string | undefined {
   const raw = getQueryString(value);
