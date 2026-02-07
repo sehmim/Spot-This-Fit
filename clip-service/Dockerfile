@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
 
-EXPOSE 5111
+ENV PORT=5111
+EXPOSE ${PORT}
 
 CMD ["python", "main.py"]
