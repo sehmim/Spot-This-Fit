@@ -46,8 +46,8 @@ export async function generateMetadata(): Promise<Metadata> {
       follow: true,
     },
     icons: {
-      icon: "/logo.png",
-      apple: "/logo.png",
+      icon: "/logo-blank.png",
+      apple: "/logo-blank.png",
     },
     openGraph: {
       title,
@@ -57,7 +57,7 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: "Spot This Fit",
       images: [
         {
-          url: "/logo.png",
+          url: "/logo-blank.png",
           width: 1536,
           height: 1024,
           alt: "Spot This Fit logo",
@@ -68,7 +68,7 @@ export async function generateMetadata(): Promise<Metadata> {
       card: "summary",
       title,
       description,
-      images: ["/logo.png"],
+      images: ["/logo-blank.png"],
     },
   };
 }
