@@ -22,6 +22,7 @@ import type {
   CjProductsResult,
 } from "../services/providers/types.js";
 import { AwinProductStore } from "../services/providers/awin-product-store.js";
+import { buildSeedProduct } from "../services/providers/match-utils.js";
 
 interface SearchSession {
   request: SearchRequest;
@@ -471,6 +472,82 @@ export async function searchCjProducts(req: Request, res: Response) {
   }
 }
 
+export async function searchProductSuggestions(req: Request, res: Response) {
+  const query = getQueryString(req.query.q) ?? getQueryString(req.query.query);
+  const rawLimit = parseNumber(req.query.limit) ?? 24;
+  const limit = Math.min(60, Math.max(1, rawLimit));
+  const offset = parseNumber(req.query.offset) ?? 0;
+
+  if (!query) {
+    const error: ApiError = {
+      success: false,
+      error: {
+        code: "INVALID_REQUEST",
+        message: "Provide a query via ?q=",
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(400).json(error);
+    return;
+  }
+
+  const provider = getProductProvider();
+
+  try {
+    if (provider.searchSuggestions) {
+      const result = await provider.searchSuggestions(query, {
+        limit,
+        offset,
+      });
+
+      const payload: ApiResponse<typeof result> = {
+        success: true,
+        data: result,
+        timestamp: new Date().toISOString(),
+      };
+
+      res.json(payload);
+      return;
+    }
+
+    const store = new AwinProductStore();
+    const results = await store.searchProducts(query, limit, offset);
+    const products = results.map((result) =>
+      buildSeedProduct(query, {
+        id: result.product.aw_product_id,
+        name: result.product.product_name,
+        brand: result.product.brand_name || "Unknown",
+        currency: result.product.currency || "USD",
+      })
+    );
+
+    const payload: ApiResponse<{
+      products: typeof products;
+      nextOffset: number | null;
+    }> = {
+      success: true,
+      data: {
+        products,
+        nextOffset: products.length === limit ? offset + products.length : null,
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json(payload);
+  } catch (err) {
+    const error: ApiError = {
+      success: false,
+      error: {
+        code: "SUGGESTIONS_ERROR",
+        message: "Failed to fetch product suggestions",
+        details: { error: String(err) },
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(500).json(error);
+  }
+}
+
 export async function createSearch(req: Request, res: Response) {
   const body = req.body as SearchRequest;
 
@@ -711,7 +788,12 @@ export async function streamSearchResults(req: Request, res: Response) {
   const provider = getProductProvider();
   let productCount = 0;
 
-  for await (const enrichedProduct of provider.enrichProducts(identifiedProducts)) {
+  const enrichOptions = {
+    frameImage: session.request.frameImage,
+    highlight: session.request.highlight ?? undefined,
+  };
+
+  for await (const enrichedProduct of provider.enrichProducts(identifiedProducts, enrichOptions)) {
     productCount++;
     const productLabel = `${enrichedProduct.brand !== "Unknown" ? enrichedProduct.brand + " " : ""}${enrichedProduct.name}`;
 

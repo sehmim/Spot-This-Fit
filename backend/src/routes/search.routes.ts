@@ -3,6 +3,7 @@ import {
   createSearch,
   searchCjProducts,
   searchAwinProducts,
+  searchProductSuggestions,
   getSearchStatus,
   getSearchResults,
   createFrameSearch,
@@ -15,6 +16,7 @@ const router = Router();
 router.post("/", createSearch);
 router.get("/", searchCjProducts);
 router.get("/awin", searchAwinProducts);
+router.get("/suggestions", searchProductSuggestions);
 router.get("/:searchId/status", getSearchStatus);
 router.get("/:searchId/results", getSearchResults);
 

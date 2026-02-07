@@ -3,10 +3,14 @@ import type {
   ProductProvider,
   ProductSearchOptions,
   ProductSuggestionResult,
+  EnrichOptions,
   AwinProduct,
 } from "./types.js";
 import { AwinProductStore } from "./awin-product-store.js";
 import { buildSeedProduct, scoreListingMatch } from "./match-utils.js";
+import { embeddingsEnabled, getTextEmbedding } from "../embeddings.js";
+import { clipEnabled, getImageEmbedding } from "../clip.js";
+import { cropImage } from "../image-crop.js";
 
 function isMockMode(): boolean {
   // Not mock mode if DATABASE_URL is set
@@ -164,7 +168,10 @@ export class AwinProvider implements ProductProvider {
   readonly name = "awin";
   private store: AwinProductStore | null = null;
 
-  async *enrichProducts(products: Product[]): AsyncGenerator<Product> {
+  async *enrichProducts(
+    products: Product[],
+    options?: EnrichOptions
+  ): AsyncGenerator<Product> {
     const mock = isMockMode();
 
     if (mock) {
@@ -194,6 +201,8 @@ export class AwinProvider implements ProductProvider {
       return;
     }
 
+    const useClip = clipEnabled() && !!options?.frameImage;
+
     for (const product of products) {
       const baseQuery = product.searchQuery ?? `${product.brand} ${product.name}`;
       const query = product.exactModel && !baseQuery.includes(product.exactModel)
@@ -201,8 +210,60 @@ export class AwinProvider implements ProductProvider {
         : baseQuery;
 
       try {
-        const results = await this.store.searchProducts(query, 5, 0);
-        console.log(`[awin] Found ${results.length} results for "${query}"`);
+        let results: { product: AwinProduct; score: number }[] = [];
+
+        // Strategy 1: Image-based search via FashionCLIP
+        if (useClip) {
+          try {
+            let imageBase64: string;
+
+            // If user drew a highlight box and this is the highlighted product, crop it
+            if (product.isHighlighted && options.highlight) {
+              imageBase64 = await cropImage(options.frameImage!, options.highlight);
+              console.log(`[awin] Cropped highlighted region for "${product.name}"`);
+            } else {
+              // Use the full frame image for non-highlighted items
+              imageBase64 = options.frameImage!.includes(",")
+                ? options.frameImage!.split(",")[1]
+                : options.frameImage!;
+            }
+
+            const embedding = await getImageEmbedding(imageBase64);
+            results = await this.store.searchProductsImageVector(embedding, 8, 0);
+            console.log(
+              `[awin] Image vector search found ${results.length} results for "${product.name}"`
+            );
+          } catch (err) {
+            console.warn(
+              "[awin] Image vector search failed, falling back to text:",
+              err
+            );
+          }
+        }
+
+        // Strategy 2: Text embedding search (fallback)
+        if (results.length === 0 && embeddingsEnabled()) {
+          try {
+            const embedding = await getTextEmbedding(query);
+            results = await this.store.searchProductsVector(embedding, 8, 0);
+            console.log(
+              `[awin] Text vector search found ${results.length} results for "${query}"`
+            );
+          } catch (err) {
+            console.warn(
+              "[awin] Text vector search failed, falling back to full-text:",
+              err
+            );
+          }
+        }
+
+        // Strategy 3: Full-text search (final fallback)
+        if (results.length === 0) {
+          results = await this.store.searchProducts(query, 5, 0);
+          console.log(
+            `[awin] Full-text search found ${results.length} results for "${query}"`
+          );
+        }
 
         if (results.length > 0) {
           const best = this.pickBestMatch(results, product);
@@ -272,8 +333,25 @@ export class AwinProvider implements ProductProvider {
     }
 
     await this.store.ensureReady();
-
-    const results = await this.store.searchProducts(query, limit, offset);
+    let results: { product: AwinProduct; score: number }[] = [];
+    if (embeddingsEnabled()) {
+      try {
+        const embedding = await getTextEmbedding(query);
+        results = await this.store.searchProductsVector(
+          embedding,
+          limit,
+          offset
+        );
+      } catch (err) {
+        console.warn(
+          "[awin] Vector suggestions failed, falling back to full-text:",
+          err
+        );
+      }
+    }
+    if (results.length === 0) {
+      results = await this.store.searchProducts(query, limit, offset);
+    }
     const products = results.map((result) => {
       const seed = buildSeedProduct(query, {
         id: result.product.aw_product_id,

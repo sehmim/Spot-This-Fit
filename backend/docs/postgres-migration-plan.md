@@ -58,6 +58,8 @@ Add to `backend/.env`:
 
 ```bash
 DATABASE_URL=postgres://spotthisfit:spotthisfit@localhost:5432/spotthisfit
+OPENAI_API_KEY=your-key
+# Optional: OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
 When `DATABASE_URL` is set, the app uses PostgreSQL for product search. Without it, Awin runs in mock mode.
@@ -68,6 +70,7 @@ When `DATABASE_URL` is set, the app uses PostgreSQL for product search. Without 
 |---|---|---|
 | `db:migrate` | `pnpm --filter backend run db:migrate` | Run database migrations |
 | `import-csv` | `pnpm --filter backend run import-csv <path>` | Import Awin CSV into database |
+| `build-embeddings` | `pnpm --filter backend run build-embeddings` | Build pgvector embeddings for Awin catalog |
 | `dev` | `pnpm --filter backend run dev` | Start dev server |
 
 ## Weekly CSV Refresh
@@ -134,3 +137,5 @@ PostgreSQL `ts_rank` with custom weights `{D=0.1, C=0.3, B=0.4, A=0.2}` approxim
 **Search returns empty results** — Import the CSV: `pnpm --filter backend run import-csv ./backend/datafeed_2754398.csv`
 
 **Connection refused on port 5432** — Start Postgres: `brew services start postgresql@14` or `docker compose up -d`
+
+**Vector search missing** — Run `pnpm --filter backend run build-embeddings` after importing the CSV. This populates `awin_product_embeddings` for semantic search.

@@ -117,7 +117,7 @@ export default async function LandingPage() {
       </div>
 
       {/* Block 3: Demo Video */}
-      <div
+      {/* <div
         className="flex min-h-dvh flex-col items-center justify-center px-4 py-10 sm:px-6 md:px-8 text-[#1A1A2E] mt-12"
         style={{ backgroundColor: "white" }}
       >
@@ -126,10 +126,10 @@ export default async function LandingPage() {
           title={t("landing.demo.title")}
           subtitle={t("landing.demo.subtitle")}
         />
-      </div>
+      </div> */}
 
       {/* Block 4: Style Obsessions + Use Cases + Platforms */}
-      <div
+      {/* <div
         className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-12 sm:px-6 md:px-8"
         style={{ backgroundColor: "#F7E7CE" }}
       >
@@ -162,7 +162,7 @@ export default async function LandingPage() {
             {t("landing.keywords")}
           </p>
         </section>
-      </div>
+      </div> */}
     </div>
   );
 }

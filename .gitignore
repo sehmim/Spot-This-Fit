@@ -15,3 +15,5 @@ dist/
 .promptvc/
 .env*.local
 .promptvc
+
+/backend/data/*

@@ -1,4 +1,5 @@
 import { sql } from "../../db/connection.js";
+import { toVectorLiteral } from "../embeddings.js";
 import type { AwinProduct, AwinSearchResult } from "./types.js";
 
 /**
@@ -62,6 +63,92 @@ export class AwinProductStore {
       product: rowToAwinProduct(row),
       score: parseFloat(row.score) || 0,
       feedId: "db",
+    }));
+  }
+
+  /**
+   * Vector similarity search using pgvector embeddings.
+   */
+  async searchProductsVector(
+    embedding: number[],
+    limit: number = 10,
+    offset: number = 0
+  ): Promise<AwinSearchResult[]> {
+    if (!embedding.length) return [];
+
+    const vectorLiteral = toVectorLiteral(embedding);
+
+    const rows = await sql`
+      SELECT
+        p.aw_product_id, p.product_name, p.brand_name,
+        p.aw_image_url, p.merchant_image_url, p.large_image,
+        p.search_price::text AS search_price,
+        p.store_price::text AS store_price,
+        p.display_price::text AS display_price,
+        p.rrp_price::text AS rrp_price,
+        p.savings_percent::text AS savings_percent,
+        p.currency, p.aw_deep_link, p.merchant_deep_link,
+        p.merchant_name, p.description, p.product_short_description,
+        p.category_name, p.merchant_category, p.product_type,
+        p.colour, p.in_stock, p.stock_status, p.keywords,
+        p.fashion_material, p.fashion_size,
+        p.product_model, p.model_number,
+        p.is_in_stock,
+        (1 - (e.embedding <=> ${vectorLiteral}::vector)) AS score
+      FROM awin_product_embeddings e
+      JOIN awin_products p ON p.aw_product_id = e.aw_product_id
+      ORDER BY e.embedding <=> ${vectorLiteral}::vector
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `;
+
+    return rows.map((row) => ({
+      product: rowToAwinProduct(row),
+      score: parseFloat(row.score) || 0,
+      feedId: "vector",
+    }));
+  }
+
+  /**
+   * Image-based vector similarity search using FashionCLIP 512-dim embeddings.
+   */
+  async searchProductsImageVector(
+    embedding: number[],
+    limit: number = 10,
+    offset: number = 0
+  ): Promise<AwinSearchResult[]> {
+    if (!embedding.length) return [];
+
+    const vectorLiteral = toVectorLiteral(embedding);
+
+    const rows = await sql`
+      SELECT
+        p.aw_product_id, p.product_name, p.brand_name,
+        p.aw_image_url, p.merchant_image_url, p.large_image,
+        p.search_price::text AS search_price,
+        p.store_price::text AS store_price,
+        p.display_price::text AS display_price,
+        p.rrp_price::text AS rrp_price,
+        p.savings_percent::text AS savings_percent,
+        p.currency, p.aw_deep_link, p.merchant_deep_link,
+        p.merchant_name, p.description, p.product_short_description,
+        p.category_name, p.merchant_category, p.product_type,
+        p.colour, p.in_stock, p.stock_status, p.keywords,
+        p.fashion_material, p.fashion_size,
+        p.product_model, p.model_number,
+        p.is_in_stock,
+        (1 - (e.embedding <=> ${vectorLiteral}::vector)) AS score
+      FROM awin_image_embeddings e
+      JOIN awin_products p ON p.aw_product_id = e.aw_product_id
+      ORDER BY e.embedding <=> ${vectorLiteral}::vector
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `;
+
+    return rows.map((row) => ({
+      product: rowToAwinProduct(row),
+      score: parseFloat(row.score) || 0,
+      feedId: "image-vector",
     }));
   }
 

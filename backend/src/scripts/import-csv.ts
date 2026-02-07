@@ -43,8 +43,8 @@ const NUMERIC_COLUMNS = new Set([
   "rrp_price",
   "savings_percent",
 ]);
-// Postgres max params = 65534, 26 columns -> max ~2500 rows per batch
-const BATCH_SIZE = 2500;
+// Postgres max params = 65534, 28 columns -> max ~2300 rows per batch
+const BATCH_SIZE = 2000;
 
 // The table creation SQL (same schema as migration, but for staging table)
 const CREATE_TABLE_SQL = `

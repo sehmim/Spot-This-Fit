@@ -7,6 +7,13 @@ import type { Product } from "@spotthisfit/shared";
  * Implementations must be swappable — the active provider is chosen
  * via the PRODUCT_PROVIDER env variable.
  */
+export interface EnrichOptions {
+  /** The original uploaded frame image as base64, used for image-based search. */
+  frameImage?: string;
+  /** Optional bounding box the user drew to highlight a specific item. */
+  highlight?: { x: number; y: number; width: number; height: number };
+}
+
 export interface ProductProvider {
   /** Human-readable provider name (for logging). */
   readonly name: string;
@@ -17,7 +24,10 @@ export interface ProductProvider {
    * Yields one enriched Product at a time so the caller can stream
    * results to the client via SSE as each product is resolved.
    */
-  enrichProducts(products: Product[]): AsyncGenerator<Product>;
+  enrichProducts(
+    products: Product[],
+    options?: EnrichOptions
+  ): AsyncGenerator<Product>;
 
   /**
    * Optional paginated search for additional product suggestions.
