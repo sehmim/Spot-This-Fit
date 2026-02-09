@@ -21,8 +21,10 @@ export function FindMoreCta() {
           </Link>
         </Button>
         <Button asChild size="sm" className="gap-1.5">
-          <Search className="size-3.5" />
-          <Link href="/search">{t("results.findMore.tryNewVideo")}</Link>
+          <Link href="/search">
+            <Search className="size-3.5" />
+            {t("results.findMore.tryNewVideo")}
+          </Link>
         </Button>
       </div>
     </div>

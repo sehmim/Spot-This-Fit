@@ -76,7 +76,6 @@ function StageIndicator({ current, total }: { current: number; total: number }) 
 export default function PreviewPage() {
   const router = useRouter();
   const searchMode = useSearchStore((s) => s.searchMode);
-  const uploadedImage = useSearchStore((s) => s.uploadedImage);
   const videoPreviewUrl = useSearchStore((s) => s.videoPreviewUrl);
   const setSelectedFrame = useSearchStore((s) => s.setSelectedFrame);
   const setProducts = useResultsStore((s) => s.setProducts);
@@ -91,12 +90,11 @@ export default function PreviewPage() {
   const stage: Stage = (() => {
     if (videoFrames.error || imageSearch.error) return "error";
     if (videoFrames.isLoading) return "fetching_frames";
-    if (searchMode === "video" && videoFrames.frames.length > 0 && imageSearch.stage === "idle")
+    if (videoFrames.frames.length > 0 && imageSearch.stage === "idle")
       return "select_frame";
     if (imageSearch.stage === "analyzing") return "analyzing";
     if (imageSearch.stage === "finding_matches") return "finding_matches";
-    if (searchMode === "video") return "fetching_frames";
-    return "analyzing";
+    return "fetching_frames";
   })();
 
   const errorMessage = videoFrames.error || imageSearch.error;
@@ -116,19 +114,10 @@ export default function PreviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchMode, videoPreviewUrl]);
 
-  // Image flow: start search on mount
-  useEffect(() => {
-    if (searchMode !== "image" || !uploadedImage || hasStarted.current) return;
-    hasStarted.current = true;
-    imageSearch.searchByBase64(uploadedImage);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchMode, uploadedImage]);
-
   // Navigate to results when search completes
   useEffect(() => {
     if (imageSearch.stage !== "done") return;
-    const source = searchMode === "image" ? uploadedImage : selectedPreview;
-    if (source) setSelectedFrame(source);
+    if (selectedPreview) setSelectedFrame(selectedPreview);
     setProducts(imageSearch.products);
     router.push("/results");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,29 +132,22 @@ export default function PreviewPage() {
     hasStarted.current = false;
     videoFrames.reset();
     imageSearch.reset();
-    if (searchMode === "video" && videoPreviewUrl) {
+    if (videoPreviewUrl) {
       hasStarted.current = true;
       videoFrames.fetchFrames(videoPreviewUrl);
-    } else if (searchMode === "image" && uploadedImage) {
-      hasStarted.current = true;
-      imageSearch.searchByBase64(uploadedImage);
     }
   };
 
-  const totalSteps = searchMode === "video" ? 4 : 2;
+  const totalSteps = 4;
   const currentStep =
     stage === "fetching_frames"
       ? 0
       : stage === "select_frame"
         ? 1
         : stage === "analyzing"
-          ? searchMode === "video"
-            ? 2
-            : 0
+          ? 2
           : stage === "finding_matches"
-            ? searchMode === "video"
-              ? 3
-              : 1
+            ? 3
             : 0;
 
   if (!searchMode) return null;
@@ -256,7 +238,7 @@ export default function PreviewPage() {
     <PageTransition>
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-8 px-4">
         {/* Source image preview */}
-        {(uploadedImage || selectedPreview) && (
+        {selectedPreview && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -264,7 +246,7 @@ export default function PreviewPage() {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={uploadedImage || selectedPreview || ""}
+              src={selectedPreview}
               alt="Source"
               className="h-full w-full object-cover"
             />
@@ -321,10 +303,11 @@ export default function PreviewPage() {
         {/* Subtle loading bar */}
         <div className="w-full max-w-xs overflow-hidden rounded-full bg-muted">
           <motion.div
+            key={stage}
             className="h-1 rounded-full bg-primary"
             initial={{ width: "0%" }}
             animate={{ width: "100%" }}
-            transition={{ duration: 8, ease: "easeInOut" }}
+            transition={{ duration: stage === "fetching_frames" ? 12 : 4, ease: "easeInOut" }}
           />
         </div>
       </div>

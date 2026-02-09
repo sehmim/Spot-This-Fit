@@ -116,12 +116,12 @@ export function ProductDetailDrawer({
         </SheetClose>
 
         {/* Product image */}
-        <div className="relative aspect-[4/5] w-full shrink-0 bg-muted/30">
+        <div className="relative w-full max-h-[60vh] shrink-0 bg-muted/30">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={product.imageUrl}
             alt={product.name}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
           />
 
           {/* Badges overlay */}
