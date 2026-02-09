@@ -23,11 +23,8 @@ import type {
 } from "../services/providers/types.js";
 import { AwinProductStore } from "../services/providers/awin-product-store.js";
 import { buildSeedProduct } from "../services/providers/match-utils.js";
-import { getImageEmbedding } from "../services/clip.js";
-import {
-  searchPineconeByImage,
-  pineconeEnabled,
-} from "../services/providers/pinecone-store.js";
+import { clipEnabled, getImageEmbedding, getImageEmbeddingFromUrl } from "../services/clip.js";
+import { pineconeEnabled, searchPineconeByImage } from "../services/providers/pinecone-store.js";
 
 interface SearchSession {
   request: SearchRequest;
@@ -841,21 +838,34 @@ export async function streamSearchResults(req: Request, res: Response) {
   res.end();
 }
 
-// --- Pinecone image search (direct, no SSE) ---
+// --- Image similarity search (Pinecone + FashionCLIP) ---
 
 export async function imageSearch(req: Request, res: Response) {
-  const { image } = req.body as { image?: string };
+  const { image, imageUrl } = req.body as { image?: string; imageUrl?: string };
 
-  if (!image) {
+  if (!image && !imageUrl) {
     const error: ApiError = {
       success: false,
       error: {
         code: "INVALID_REQUEST",
-        message: "Provide a base64 image via 'image' field",
+        message: "Provide a base64 image via 'image' or a URL via 'imageUrl'",
       },
       timestamp: new Date().toISOString(),
     };
     res.status(400).json(error);
+    return;
+  }
+
+  if (!clipEnabled()) {
+    const error: ApiError = {
+      success: false,
+      error: {
+        code: "CONFIG_MISSING",
+        message: "REPLICATE_API_TOKEN or REPLICATE_MODEL_ID is not configured",
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(500).json(error);
     return;
   }
 
@@ -873,15 +883,17 @@ export async function imageSearch(req: Request, res: Response) {
   }
 
   try {
-    console.log("[ImageSearch] Generating CLIP embedding...");
-    const embedding = await getImageEmbedding(image);
+    console.log("[ImageSearch] Generating CLIP embedding via Replicate...");
+    const embedding = imageUrl
+      ? await getImageEmbeddingFromUrl(imageUrl)
+      : await getImageEmbedding(image!);
 
     console.log("[ImageSearch] Querying Pinecone...");
     const products = await searchPineconeByImage(embedding, 20);
 
     console.log(`[ImageSearch] Found ${products.length} results`);
 
-    const payload: ApiResponse<{ products: typeof products }> = {
+    const payload: ApiResponse<{ products: Product[] }> = {
       success: true,
       data: { products },
       timestamp: new Date().toISOString(),

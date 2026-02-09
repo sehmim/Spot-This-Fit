@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { HighlightRegion } from "@spotthisfit/shared";
 
+type SearchMode = "image" | "video" | null;
+
 interface SearchState {
   inputUrl: string;
   downloadedVideoUrl: string | null;
@@ -10,6 +12,9 @@ interface SearchState {
   highlight: HighlightRegion | null;
   description: string;
   searchId: string | null;
+  searchMode: SearchMode;
+  uploadedImage: string | null;
+  videoPreviewUrl: string | null;
 
   setInputUrl: (url: string) => void;
   setDownloadedVideoUrl: (url: string) => void;
@@ -19,6 +24,9 @@ interface SearchState {
   setHighlight: (h: HighlightRegion) => void;
   setDescription: (d: string) => void;
   setSearchId: (id: string) => void;
+  setSearchMode: (mode: SearchMode) => void;
+  setUploadedImage: (img: string | null) => void;
+  setVideoPreviewUrl: (url: string | null) => void;
   reset: () => void;
 }
 
@@ -31,6 +39,9 @@ const initialState = {
   highlight: null as HighlightRegion | null,
   description: "",
   searchId: null as string | null,
+  searchMode: null as SearchMode,
+  uploadedImage: null as string | null,
+  videoPreviewUrl: null as string | null,
 };
 
 export const useSearchStore = create<SearchState>((set) => ({
@@ -43,5 +54,8 @@ export const useSearchStore = create<SearchState>((set) => ({
   setHighlight: (h) => set({ highlight: h }),
   setDescription: (d) => set({ description: d }),
   setSearchId: (id) => set({ searchId: id }),
+  setSearchMode: (mode) => set({ searchMode: mode }),
+  setUploadedImage: (img) => set({ uploadedImage: img }),
+  setVideoPreviewUrl: (url) => set({ videoPreviewUrl: url }),
   reset: () => set(initialState),
 }));

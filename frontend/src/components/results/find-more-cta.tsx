@@ -17,12 +17,12 @@ export function FindMoreCta() {
       <div className="mt-2 flex gap-2">
         <Button asChild variant="outline" size="sm" className="gap-1.5">
           <Link href="/search">
-            <Search className="size-3.5" />
             {t("results.findMore.searchAgain")}
           </Link>
         </Button>
         <Button asChild size="sm" className="gap-1.5">
-          <Link href="/">{t("results.findMore.tryNewVideo")}</Link>
+          <Search className="size-3.5" />
+          <Link href="/search">{t("results.findMore.tryNewVideo")}</Link>
         </Button>
       </div>
     </div>

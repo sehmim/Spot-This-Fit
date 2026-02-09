@@ -4,106 +4,59 @@ import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchStore } from "@/stores/search-store";
 import { useResultsStore } from "@/stores/results-store";
-import { apiClient } from "@/lib/api-client";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageTransition } from "@/components/layout/page-transition";
-import { Loader2, ImagePlus, X, Link2, Clock } from "lucide-react";
-import type { ApiResponse, VideoDownloadResponse, Product } from "@spotthisfit/shared";
+import { ImagePlus, X, Link2 } from "lucide-react";
 import { useTranslations } from "@/components/i18n/locale-provider";
-import { getErrorMessage } from "@/lib/error-messages";
 
 export default function SearchPage() {
   const t = useTranslations();
   const router = useRouter();
-  const setSearchId = useSearchStore((s) => s.setSearchId);
-  const setSelectedFrame = useSearchStore((s) => s.setSelectedFrame);
   const inputUrl = useSearchStore((s) => s.inputUrl);
   const setInputUrl = useSearchStore((s) => s.setInputUrl);
-  const setDownloadedVideoUrl = useSearchStore(
-    (s) => s.setDownloadedVideoUrl
-  );
+  const setSearchMode = useSearchStore((s) => s.setSearchMode);
+  const setUploadedImage = useSearchStore((s) => s.setUploadedImage);
+  const setVideoPreviewUrl = useSearchStore((s) => s.setVideoPreviewUrl);
   const resetStream = useResultsStore((s) => s.resetStream);
 
-  // Image upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [localImage, setLocalImage] = useState<string | null>(null);
   const [uploadFileName, setUploadFileName] = useState<string>("");
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState(inputUrl);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setUploadError(null);
     setUploadFileName(file.name);
-
     const reader = new FileReader();
     reader.onload = () => {
-      setUploadedImage(reader.result as string);
+      setLocalImage(reader.result as string);
     };
     reader.readAsDataURL(file);
   }, []);
 
   const clearUpload = useCallback(() => {
-    setUploadedImage(null);
+    setLocalImage(null);
     setUploadFileName("");
-    setUploadError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
-  const setProducts = useResultsStore((s) => s.setProducts);
-
-  const handleImageSearch = async () => {
-    if (!uploadedImage) return;
-    setIsUploading(true);
-    setUploadError(null);
+  const handleImageSearch = () => {
+    if (!localImage) return;
     resetStream();
-
-    try {
-      const res = await apiClient.post<ApiResponse<{ products: Product[] }>>(
-        "/api/search/image",
-        { image: uploadedImage }
-      );
-      setSelectedFrame(uploadedImage);
-      setProducts(res.data.products);
-      router.push("/results");
-    } catch (err) {
-      setUploadError(
-        getErrorMessage(err, t, { fallbackKey: "search.upload.error" })
-      );
-      setIsUploading(false);
-    }
+    setUploadedImage(localImage);
+    setSearchMode("image");
+    router.push("/search/preview");
   };
 
-  const handleVideoSearch = async () => {
-    if (!videoUrl.trim()) {
-      setDownloadError(t("errors.missingUrl"));
-      return;
-    }
-
-    setIsDownloading(true);
-    setDownloadError(null);
-
-    try {
-      const res = await apiClient.post<ApiResponse<VideoDownloadResponse>>(
-        "/api/video/download",
-        { url: videoUrl.trim() }
-      );
-      setInputUrl(videoUrl.trim());
-      setDownloadedVideoUrl(res.data.videoUrl);
-      router.push("/search/frame");
-    } catch (err) {
-      setDownloadError(
-        getErrorMessage(err, t, { fallbackKey: "errors.downloadFailed" })
-      );
-      setIsDownloading(false);
-    }
+  const handleVideoSearch = () => {
+    if (!videoUrl.trim()) return;
+    resetStream();
+    setInputUrl(videoUrl.trim());
+    setVideoPreviewUrl(videoUrl.trim());
+    setSearchMode("video");
+    router.push("/search/preview");
   };
 
   return (
@@ -135,7 +88,7 @@ export default function SearchPage() {
             onChange={handleFileSelect}
           />
 
-          {!uploadedImage ? (
+          {!localImage ? (
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -151,7 +104,7 @@ export default function SearchPage() {
               <div className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={uploadedImage}
+                  src={localImage}
                   alt={uploadFileName}
                   className="max-h-64 w-full object-contain bg-muted/30"
                 />
@@ -171,28 +124,15 @@ export default function SearchPage() {
             </div>
           )}
 
-          {uploadError && (
-            <p className="text-sm text-destructive">{uploadError}</p>
-          )}
-
           <Button
             type="button"
             size="lg"
             className="h-12 w-full gap-2 text-base"
-            disabled={!uploadedImage || isUploading}
+            disabled={!localImage}
             onClick={handleImageSearch}
           >
-            {isUploading ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                {t("search.upload.analyzing")}
-              </>
-            ) : (
-              <>
-                <ImagePlus className="size-4" />
-                {t("search.upload.button")}
-              </>
-            )}
+            <ImagePlus className="size-4" />
+            {t("search.upload.button")}
           </Button>
         </div>
 
@@ -205,19 +145,20 @@ export default function SearchPage() {
           <div className="h-px flex-1 bg-border" />
         </div>
 
-        {/* Video URL — coming soon */}
-        <div className="relative flex flex-col gap-4 rounded-lg border bg-muted/10 p-4 opacity-60">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-muted-foreground">
+        {/* Video URL */}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-foreground">
               {t("search.form.videoUrlLabel")}
             </label>
-            <Badge variant="outline" className="gap-1 text-xs">
-              Coming soon...
-            </Badge>
+            <p className="text-xs text-muted-foreground">
+              Paste a video link to extract frames and find similar products
+            </p>
           </div>
           <div className="relative">
             <Input
-              disabled
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
               placeholder={t("search.form.placeholder")}
               className="h-11 pl-10"
             />
@@ -226,9 +167,11 @@ export default function SearchPage() {
           <Button
             type="button"
             size="lg"
-            className="h-12 w-full text-base"
-            disabled
+            className="h-12 w-full gap-2 text-base"
+            disabled={!videoUrl.trim()}
+            onClick={handleVideoSearch}
           >
+            <Link2 className="size-4" />
             {t("search.form.next")}
           </Button>
         </div>
