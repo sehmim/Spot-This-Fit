@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LocaleProvider } from "@/components/i18n/locale-provider";
+import { CookieConsent } from "@/components/layout/cookie-consent";
+import { HotjarScript } from "@/components/layout/hotjar-script";
 import { createTranslator } from "@/lib/i18n";
 import { getLocaleFromCookies } from "@/lib/i18n-server";
 import { getSiteUrl } from "@/lib/site";
@@ -83,20 +84,14 @@ export default async function RootLayout({
   return (
     <html lang={locale}>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <Script
-          id="hotjar"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html:
-              "(function(h,o,t,j,a,r){h.hj=h.hj||function(){(h.hj.q=h.hj.q||[]).push(arguments)};h._hjSettings={hjid:6636994,hjsv:6};a=o.getElementsByTagName('head')[0];r=o.createElement('script');r.async=1;r.src=t+h._hjSettings.hjid+j+h._hjSettings.hjsv;a.appendChild(r);})(window,document,'https://static.hotjar.com/c/hotjar-','.js?sv=');",
-          }}
-        />
+        <HotjarScript />
         <LocaleProvider initialLocale={locale}>
           <TooltipProvider>
             <Header />
             <main className="min-h-[calc(100dvh-64px)]">{children}</main>
             <Footer />
             <Toaster position="top-center" richColors />
+            <CookieConsent />
           </TooltipProvider>
         </LocaleProvider>
       </body>
