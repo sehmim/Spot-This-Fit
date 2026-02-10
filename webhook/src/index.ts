@@ -1,6 +1,7 @@
 interface Env {
   VERIFY_TOKEN: string;
   APP_SECRET: string;
+  PAGE_ACCESS_TOKEN: string;
 }
 
 export default {
@@ -62,7 +63,7 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
   console.log("=== INSTAGRAM WEBHOOK PAYLOAD ===");
   console.log(JSON.stringify(payload, null, 2));
 
-  // Walk through entries and look for shared links (reels/posts)
+  // Walk through entries and look for shared content (reels/posts)
   if (payload.object === "instagram") {
     for (const entry of payload.entry ?? []) {
       for (const event of entry.messaging ?? []) {
@@ -71,11 +72,17 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
 
         if (message?.attachments) {
           for (const attachment of message.attachments) {
-            if (attachment.type === "share" || attachment.type === "link") {
-              console.log("=== SHARED LINK DETECTED ===");
+            if (["ig_reel", "share", "link"].includes(attachment.type)) {
+              const contentUrl = attachment.payload?.url;
+              console.log("=== SHARED CONTENT DETECTED ===");
               console.log(`Sender: ${senderId}`);
-              console.log(`URL: ${attachment.payload?.url}`);
+              console.log(`Type: ${attachment.type}`);
+              console.log(`URL: ${contentUrl}`);
+              console.log(`Reel Video ID: ${attachment.payload?.reel_video_id}`);
               console.log(`Title: ${attachment.payload?.title}`);
+
+              const shopUrl = `https://www.spotthis.fit/results?url=${encodeURIComponent(contentUrl)}`;
+              await sendButtonReply(senderId, shopUrl, env);
             }
           }
         }
@@ -86,9 +93,13 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
             /https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p|reels)\/[\w-]+/
           );
           if (igUrlMatch) {
+            const contentUrl = igUrlMatch[0];
             console.log("=== INSTAGRAM LINK IN TEXT ===");
             console.log(`Sender: ${senderId}`);
-            console.log(`URL: ${igUrlMatch[0]}`);
+            console.log(`URL: ${contentUrl}`);
+
+            const shopUrl = `https://www.spotthis.fit/results?url=${encodeURIComponent(contentUrl)}`;
+            await sendButtonReply(senderId, shopUrl, env);
           }
         }
       }
@@ -97,6 +108,57 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
 
   // Meta requires a 200 response within 20 seconds
   return new Response("EVENT_RECEIVED", { status: 200 });
+}
+
+/**
+ * Send a reply with a "Shop Now" button linking to spotthis.fit.
+ */
+async function sendButtonReply(
+  recipientId: string,
+  shopUrl: string,
+  env: Env
+): Promise<void> {
+  const response = await fetch(
+    `https://graph.instagram.com/v22.0/me/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.PAGE_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: {
+          attachment: {
+            type: "template",
+            payload: {
+              template_type: "generic",
+              elements: [
+                {
+                  title: "We received your message!",
+                  subtitle: "Checkout what we found",
+                  buttons: [
+                    {
+                      type: "web_url",
+                      url: shopUrl,
+                      title: "Shop Now",
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error(`Failed to send button reply: ${response.status} ${error}`);
+  } else {
+    console.log(`Button reply sent to ${recipientId}`);
+  }
 }
 
 /**

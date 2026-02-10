@@ -15,6 +15,8 @@ interface SearchState {
   searchMode: SearchMode;
   uploadedImage: string | null;
   videoPreviewUrl: string | null;
+  videoFrames: string[];
+  searchDocId: string | null;
 
   setInputUrl: (url: string) => void;
   setDownloadedVideoUrl: (url: string) => void;
@@ -27,6 +29,8 @@ interface SearchState {
   setSearchMode: (mode: SearchMode) => void;
   setUploadedImage: (img: string | null) => void;
   setVideoPreviewUrl: (url: string | null) => void;
+  setVideoFrames: (frames: string[]) => void;
+  setSearchDocId: (id: string | null) => void;
   reset: () => void;
 }
 
@@ -42,6 +46,8 @@ const initialState = {
   searchMode: null as SearchMode,
   uploadedImage: null as string | null,
   videoPreviewUrl: null as string | null,
+  videoFrames: [] as string[],
+  searchDocId: null as string | null,
 };
 
 export const useSearchStore = create<SearchState>((set) => ({
@@ -57,5 +63,7 @@ export const useSearchStore = create<SearchState>((set) => ({
   setSearchMode: (mode) => set({ searchMode: mode }),
   setUploadedImage: (img) => set({ uploadedImage: img }),
   setVideoPreviewUrl: (url) => set({ videoPreviewUrl: url }),
+  setVideoFrames: (frames) => set({ videoFrames: frames }),
+  setSearchDocId: (id) => set({ searchDocId: id }),
   reset: () => set(initialState),
 }));

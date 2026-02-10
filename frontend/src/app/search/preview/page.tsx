@@ -3,23 +3,23 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ImagePlus, Sparkles, ShoppingBag, Video } from "lucide-react";
+import { Loader2, Sparkles, ShoppingBag, Video } from "lucide-react";
 import { useSearchStore } from "@/stores/search-store";
 import { useResultsStore } from "@/stores/results-store";
 import { useVideoFrames } from "@/hooks/use-video-frames";
 import { useImageSearch } from "@/hooks/use-image-search";
+import { getVideoSearchByUrl, saveVideoSearch } from "@/lib/video-search-db";
 import { Button } from "@/components/ui/button";
 import { PageTransition } from "@/components/layout/page-transition";
 
 type Stage =
   | "fetching_frames"
-  | "select_frame"
   | "analyzing"
   | "finding_matches"
   | "error";
 
 const STAGE_CONFIG: Record<
-  Exclude<Stage, "select_frame" | "error">,
+  Exclude<Stage, "error">,
   { icon: typeof Loader2; label: string; sublabel: string }
 > = {
   fetching_frames: {
@@ -78,20 +78,22 @@ export default function PreviewPage() {
   const searchMode = useSearchStore((s) => s.searchMode);
   const videoPreviewUrl = useSearchStore((s) => s.videoPreviewUrl);
   const setSelectedFrame = useSearchStore((s) => s.setSelectedFrame);
+  const setVideoFrames = useSearchStore((s) => s.setVideoFrames);
+  const setSearchDocId = useSearchStore((s) => s.setSearchDocId);
   const setProducts = useResultsStore((s) => s.setProducts);
 
   const videoFrames = useVideoFrames();
   const imageSearch = useImageSearch();
 
   const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
+  const [docId, setDocId] = useState<string | null>(null);
   const hasStarted = useRef(false);
+  const hasAutoSelected = useRef(false);
 
   // Derive the visual stage from hook states
   const stage: Stage = (() => {
     if (videoFrames.error || imageSearch.error) return "error";
     if (videoFrames.isLoading) return "fetching_frames";
-    if (videoFrames.frames.length > 0 && imageSearch.stage === "idle")
-      return "select_frame";
     if (imageSearch.stage === "analyzing") return "analyzing";
     if (imageSearch.stage === "finding_matches") return "finding_matches";
     return "fetching_frames";
@@ -106,27 +108,63 @@ export default function PreviewPage() {
     }
   }, [searchMode, router]);
 
-  // Video flow: fetch frames on mount
+  // Video flow: check Firestore cache first, then fetch frames if not cached
   useEffect(() => {
     if (searchMode !== "video" || !videoPreviewUrl || hasStarted.current) return;
     hasStarted.current = true;
-    videoFrames.fetchFrames(videoPreviewUrl);
+
+    (async () => {
+      try {
+        const cached = await getVideoSearchByUrl(videoPreviewUrl);
+        if (cached) {
+          setDocId(cached.id);
+          setSearchDocId(cached.id);
+          // Use cached frames directly — skip the worker
+          setVideoFrames(cached.frames);
+          const middleFrame = cached.frames[Math.floor(cached.frames.length / 2)];
+          setSelectedPreview(middleFrame);
+          hasAutoSelected.current = true;
+          imageSearch.searchByUrl(middleFrame);
+          return;
+        }
+      } catch {
+        // Firestore lookup failed — proceed with worker
+      }
+      videoFrames.fetchFrames(videoPreviewUrl);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchMode, videoPreviewUrl]);
+
+  // Auto-select middle frame, save to Firestore, and start search when frames arrive from worker
+  useEffect(() => {
+    if (videoFrames.frames.length === 0 || hasAutoSelected.current) return;
+    hasAutoSelected.current = true;
+    const middleFrame = videoFrames.frames[Math.floor(videoFrames.frames.length / 2)];
+    setSelectedPreview(middleFrame);
+    setVideoFrames(videoFrames.frames);
+    imageSearch.searchByUrl(middleFrame);
+
+    // Save frames to Firestore (fire-and-forget, non-blocking)
+    if (videoPreviewUrl) {
+      saveVideoSearch(videoPreviewUrl, videoFrames.frames)
+        .then((id) => {
+          setDocId(id);
+          setSearchDocId(id);
+        })
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoFrames.frames]);
 
   // Navigate to results when search completes
   useEffect(() => {
     if (imageSearch.stage !== "done") return;
     if (selectedPreview) setSelectedFrame(selectedPreview);
     setProducts(imageSearch.products);
-    router.push("/results");
+    const url = docId ? `/results?q=${docId}` : "/results";
+    router.push(url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageSearch.stage]);
-
-  const handleFrameConfirm = () => {
-    if (!selectedPreview) return;
-    imageSearch.searchByUrl(selectedPreview);
-  };
 
   const handleRetry = () => {
     hasStarted.current = false;
@@ -138,72 +176,17 @@ export default function PreviewPage() {
     }
   };
 
-  const totalSteps = 4;
+  const totalSteps = 3;
   const currentStep =
     stage === "fetching_frames"
       ? 0
-      : stage === "select_frame"
+      : stage === "analyzing"
         ? 1
-        : stage === "analyzing"
+        : stage === "finding_matches"
           ? 2
-          : stage === "finding_matches"
-            ? 3
-            : 0;
+          : 0;
 
   if (!searchMode) return null;
-
-  // Frame selection UI
-  if (stage === "select_frame") {
-    return (
-      <PageTransition>
-        <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 md:mx-auto md:max-w-2xl lg:max-w-3xl">
-          <div className="w-full max-w-sm mx-auto">
-            <StageIndicator current={currentStep} total={totalSteps} />
-          </div>
-
-          <div className="flex flex-col items-center gap-2 text-center">
-            <h2 className="text-xl font-semibold">Select a frame</h2>
-            <p className="text-sm text-muted-foreground">
-              Choose the frame that best shows the outfit you want to find
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {videoFrames.frames.map((url) => (
-              <button
-                key={url}
-                type="button"
-                onClick={() => setSelectedPreview(url)}
-                className={`overflow-hidden rounded-xl border-2 transition-all duration-200 ${
-                  selectedPreview === url
-                    ? "border-primary ring-2 ring-primary/30 scale-[1.02]"
-                    : "border-muted hover:border-muted-foreground/40"
-                }`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={url}
-                  alt="Video frame"
-                  className="aspect-[9/16] w-full object-cover"
-                />
-              </button>
-            ))}
-          </div>
-
-          <Button
-            type="button"
-            size="lg"
-            className="h-12 w-full gap-2 text-base"
-            disabled={!selectedPreview}
-            onClick={handleFrameConfirm}
-          >
-            <ImagePlus className="size-4" />
-            Find Similar Products
-          </Button>
-        </div>
-      </PageTransition>
-    );
-  }
 
   // Error state
   if (stage === "error") {

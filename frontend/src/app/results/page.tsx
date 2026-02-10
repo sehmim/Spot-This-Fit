@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useCallback, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useCallback, useState, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSearchStore } from "@/stores/search-store";
 import { useResultsStore } from "@/stores/results-store";
 import { X, ImageIcon, SlidersHorizontal } from "lucide-react";
@@ -12,6 +12,10 @@ import { EmailCaptureInline } from "@/components/results/email-capture-inline";
 import { SaveAllButton } from "@/components/results/save-all-button";
 import { ShareButton } from "@/components/results/share-button";
 import { FindMoreCta } from "@/components/results/find-more-cta";
+import { VideoFrameStrip } from "@/components/results/video-frame-strip";
+import { useImageSearch } from "@/hooks/use-image-search";
+import { useVideoFrames } from "@/hooks/use-video-frames";
+import { saveVideoSearch } from "@/lib/video-search-db";
 import { Button } from "@/components/ui/button";
 import { PageTransition } from "@/components/layout/page-transition";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,6 +24,7 @@ import { getCurrencyLocale } from "@/lib/i18n";
 import { useLocale, useTranslations } from "@/components/i18n/locale-provider";
 import type { Product, ApiResponse } from "@spotthisfit/shared";
 import { useCurrencyStore, type Currency } from "@/stores/currency-store";
+import { getVideoSearchById } from "@/lib/video-search-db";
 
 const MIN_MAIN_PRODUCTS = 4;
 const SUGGESTION_PAGE_SIZE = 24;
@@ -154,11 +159,15 @@ function DetectedItemCard({ product }: { product: Product }) {
   );
 }
 
-export default function ResultsPage() {
+function ResultsPageContent() {
   const searchId = useSearchStore((s) => s.searchId);
   const sourceImage = useSearchStore((s) => s.selectedFrame);
+  const videoFrames = useSearchStore((s) => s.videoFrames);
+  const setVideoFrames = useSearchStore((s) => s.setVideoFrames);
+  const setSelectedFrame = useSearchStore((s) => s.setSelectedFrame);
   const selectedProduct = useResultsStore((s) => s.selectedProduct);
   const setSelectedProduct = useResultsStore((s) => s.setSelectedProduct);
+  const setProducts = useResultsStore((s) => s.setProducts);
   const [previewDismissed, setPreviewDismissed] = useState(false);
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const [sortBy, setSortBy] = useState("relevance");
@@ -166,8 +175,95 @@ export default function ResultsPage() {
   const [suggestionsOffset, setSuggestionsOffset] = useState(0);
   const [suggestionsHasMore, setSuggestionsHasMore] = useState(true);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [activeFrame, setActiveFrame] = useState<string | null>(sourceImage);
+  const [frameSearching, setFrameSearching] = useState(false);
+  const frameProductCache = useRef<Map<string, Product[]>>(new Map());
+  const [loadingFromDb, setLoadingFromDb] = useState(false);
+  const hasLoadedFromDb = useRef(false);
+  const imageSearch = useImageSearch();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryId = searchParams.get("q");
+  const videoUrlParam = searchParams.get("url");
+  const hasVideoUrlParam = videoUrlParam?.startsWith("https://lookaside.fbsbx.com") ?? false;
+  const videoFramesHook = useVideoFrames();
+  const hasStartedVideoUrl = useRef(false);
   const t = useTranslations();
+
+  const hasVideoFrames = videoFrames.length > 0;
+
+  // Load frames from Firestore when arriving via ?q= param (e.g. shared link)
+  useEffect(() => {
+    if (!queryId || hasVideoFrames || hasLoadedFromDb.current) return;
+    hasLoadedFromDb.current = true;
+    setLoadingFromDb(true);
+
+    (async () => {
+      try {
+        const result = await getVideoSearchById(queryId);
+        if (!result) return;
+
+        setVideoFrames(result.frames);
+        const middleFrame = result.frames[Math.floor(result.frames.length / 2)];
+        setActiveFrame(middleFrame);
+        setSelectedFrame(middleFrame);
+        setFrameSearching(true);
+        imageSearch.searchByUrl(middleFrame);
+      } catch {
+        // Firestore lookup failed — page will show empty state
+      } finally {
+        setLoadingFromDb(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryId]);
+
+  // Extract frames from video when ?url= param is a lookaside.fbsbx.com URL
+  useEffect(() => {
+    if (!hasVideoUrlParam || !videoUrlParam || hasStartedVideoUrl.current) return;
+    hasStartedVideoUrl.current = true;
+    setFrameSearching(true);
+
+    (async () => {
+      // Check Firestore cache first
+      try {
+        const { getVideoSearchByUrl } = await import("@/lib/video-search-db");
+        const cached = await getVideoSearchByUrl(videoUrlParam);
+        if (cached) {
+          setVideoFrames(cached.frames);
+          const middleFrame = cached.frames[Math.floor(cached.frames.length / 2)];
+          setActiveFrame(middleFrame);
+          setSelectedFrame(middleFrame);
+          imageSearch.searchByUrl(middleFrame);
+          return;
+        }
+      } catch {
+        // Firestore check failed — proceed with worker
+      }
+
+      // Fetch frames from worker
+      await videoFramesHook.fetchFrames(videoUrlParam);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasVideoUrlParam, videoUrlParam]);
+
+  // When frames arrive from worker (via ?url= param), store them and start product search
+  useEffect(() => {
+    if (!hasVideoUrlParam || videoFramesHook.frames.length === 0 || hasVideoFrames) return;
+
+    const frames = videoFramesHook.frames;
+    setVideoFrames(frames);
+    const middleFrame = frames[Math.floor(frames.length / 2)];
+    setActiveFrame(middleFrame);
+    setSelectedFrame(middleFrame);
+    imageSearch.searchByUrl(middleFrame);
+
+    // Save to Firestore (fire-and-forget)
+    if (videoUrlParam) {
+      saveVideoSearch(videoUrlParam, frames).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoFramesHook.frames]);
 
   // Direct results from Pinecone image search (no streaming)
   const directProducts = useResultsStore((s) => s.streamedProducts);
@@ -175,11 +271,58 @@ export default function ResultsPage() {
 
   const hasDirectResults = !searchId && directProducts.length > 0;
 
+  // Seed the cache with the initial products for the initially selected frame
   useEffect(() => {
-    if (!searchId && !hasDirectResults) {
+    if (sourceImage && directProducts.length > 0 && !frameProductCache.current.has(sourceImage)) {
+      frameProductCache.current.set(sourceImage, directProducts);
+    }
+  }, [sourceImage, directProducts]);
+
+  // Handle frame search completion
+  useEffect(() => {
+    if (imageSearch.stage === "done" && imageSearch.products.length > 0 && activeFrame) {
+      frameProductCache.current.set(activeFrame, imageSearch.products);
+      setProducts(imageSearch.products);
+      setSelectedFrame(activeFrame);
+      setFrameSearching(false);
+      // Reset suggestions for new products
+      setSuggestions([]);
+      setSuggestionsOffset(0);
+      setSuggestionsHasMore(true);
+    }
+    if (imageSearch.stage === "error") {
+      setFrameSearching(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageSearch.stage]);
+
+  const handleFrameSelect = useCallback(
+    (frameUrl: string) => {
+      if (frameUrl === activeFrame) return;
+      setActiveFrame(frameUrl);
+
+      const cached = frameProductCache.current.get(frameUrl);
+      if (cached) {
+        setProducts(cached);
+        setSelectedFrame(frameUrl);
+        // Reset suggestions for cached products
+        setSuggestions([]);
+        setSuggestionsOffset(0);
+        setSuggestionsHasMore(true);
+        return;
+      }
+
+      setFrameSearching(true);
+      imageSearch.searchByUrl(frameUrl);
+    },
+    [activeFrame, setProducts, setSelectedFrame, imageSearch],
+  );
+
+  useEffect(() => {
+    if (!searchId && !hasDirectResults && !queryId && !hasVideoUrlParam) {
       router.replace("/");
     }
-  }, [searchId, hasDirectResults, router]);
+  }, [searchId, hasDirectResults, queryId, hasVideoUrlParam, router]);
 
   const stream = useProductStream(searchId);
 
@@ -302,11 +445,28 @@ export default function ResultsPage() {
     return () => observer.disconnect();
   }, [fetchSuggestions]);
 
-  if (!searchId && !hasDirectResults) return null;
+  if (!searchId && !hasDirectResults && !queryId && !hasVideoUrlParam) return null;
+
+  // Show loading state when extracting frames from ?url= param
+  if ((hasVideoUrlParam && videoFramesHook.isLoading) || (hasVideoUrlParam && !hasVideoFrames && !hasDirectResults)) {
+    return (
+      <PageTransition>
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-4">
+          <div className="size-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <div className="flex flex-col items-center gap-2 text-center">
+            <h2 className="text-lg font-semibold">Extracting video frames...</h2>
+            <p className="text-sm text-muted-foreground">
+              This may take a moment
+            </p>
+          </div>
+        </div>
+      </PageTransition>
+    );
+  }
 
   return (
     <PageTransition>
-      <div className="px-3 py-4 sm:px-6 sm:py-6 lg:mx-auto lg:max-w-6xl">
+      <div className={cn("px-3 py-4 sm:px-6 sm:py-6 lg:mx-auto lg:max-w-6xl", hasVideoFrames && "pb-28")}>
         {/* Mobile: compact header with source image + status */}
         <div className="mb-4 flex items-center gap-3 lg:hidden">
           {sourceImage && (
@@ -422,20 +582,30 @@ export default function ResultsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-4">
-              {sortedProducts.map((product, index) => (
-                <SimilarProductCard
-                  key={product.id}
-                  product={product}
-                  highlightLabel={
-                    index === 0
-                      ? t("results.similarProducts.mostSimilar")
-                      : index < 4
-                        ? t("results.similarProducts.verySimilar")
-                        : null
-                  }
-                />
-              ))}
+            <div className="relative">
+              {frameSearching && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/60 backdrop-blur-[2px]">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    <p className="text-xs text-muted-foreground">Finding products for this frame...</p>
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-4">
+                {sortedProducts.map((product, index) => (
+                  <SimilarProductCard
+                    key={product.id}
+                    product={product}
+                    highlightLabel={
+                      index === 0
+                        ? t("results.similarProducts.mostSimilar")
+                        : index < 4
+                          ? t("results.similarProducts.verySimilar")
+                          : null
+                    }
+                  />
+                ))}
+              </div>
             </div>
 
             {suggestionsLoading && (
@@ -465,8 +635,18 @@ export default function ResultsPage() {
         onOpenChange={handleDrawerOpenChange}
       />
 
+      {/* Video frame strip — bottom of viewport */}
+      {hasVideoFrames && (
+        <VideoFrameStrip
+          frames={videoFrames}
+          activeFrame={activeFrame}
+          onFrameSelect={handleFrameSelect}
+          isLoading={frameSearching}
+        />
+      )}
+
       {/* Floating source image preview — mobile only */}
-      {sourceImage && (
+      {sourceImage && !hasVideoFrames && (
         <div className="fixed bottom-4 right-4 z-40 lg:hidden">
           {previewDismissed ? (
             <button
@@ -505,5 +685,13 @@ export default function ResultsPage() {
         </div>
       )}
     </PageTransition>
+  );
+}
+
+export default function ResultsPage() {
+  return (
+    <Suspense>
+      <ResultsPageContent />
+    </Suspense>
   );
 }
