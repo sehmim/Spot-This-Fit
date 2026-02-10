@@ -12,6 +12,7 @@
   "references": [
     { "path": "./shared" },
     { "path": "./backend" },
-    { "path": "./frontend" }
+    { "path": "./frontend" },
+    { "path": "./webhook" }
   ]
 }

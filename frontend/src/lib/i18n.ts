@@ -49,6 +49,12 @@ export function getCurrencyLocale(locale: Locale, currency: string): string {
   if (currency === "CAD") {
     return locale === "fr" ? "fr-CA" : "en-CA";
   }
+  if (currency === "GBP") {
+    return "en-GB";
+  }
+  if (currency === "EUR") {
+    return locale === "fr" ? "fr-FR" : "en-IE";
+  }
   if (currency === "USD") {
     return locale === "fr" ? "fr-FR" : "en-US";
   }

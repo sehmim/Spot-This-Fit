@@ -16,6 +16,7 @@ import { getCurrencyLocale } from "@/lib/i18n";
 import { useLocale, useTranslations } from "@/components/i18n/locale-provider";
 import { ArrowLeft, ExternalLink, Sparkles, Tag } from "lucide-react";
 import type { Product } from "@spotthisfit/shared";
+import { useCurrencyStore } from "@/stores/currency-store";
 
 interface ProductDetailDrawerProps {
   product: Product | null;
@@ -79,19 +80,25 @@ export function ProductDetailDrawer({
 }: ProductDetailDrawerProps) {
   const { locale } = useLocale();
   const t = useTranslations();
+  const displayCurrency = useCurrencyStore((s) => s.currency);
+  const convert = useCurrencyStore((s) => s.convert);
 
   if (!product) return null;
 
+  const convertedPrice = convert(product.price, product.currency);
+  const convertedOriginal = product.originalPrice
+    ? convert(product.originalPrice, product.currency)
+    : undefined;
   const formatter = new Intl.NumberFormat(
-    getCurrencyLocale(locale, product.currency),
-    { style: "currency", currency: product.currency },
+    getCurrencyLocale(locale, displayCurrency),
+    { style: "currency", currency: displayCurrency },
   );
 
   const priceLabel =
-    product.price > 0 ? formatter.format(product.price) : t("results.priceUnavailable");
+    convertedPrice > 0 ? formatter.format(convertedPrice) : t("results.priceUnavailable");
   const originalLabel =
-    product.originalPrice && product.originalPrice > product.price
-      ? formatter.format(product.originalPrice)
+    convertedOriginal && convertedOriginal > convertedPrice
+      ? formatter.format(convertedOriginal)
       : null;
 
   const productUrl = product.affiliateUrl ?? product.shopUrl;
@@ -172,7 +179,7 @@ export function ProductDetailDrawer({
             <span
               className={cn(
                 "text-2xl font-bold",
-                product.price <= 0 && "text-muted-foreground",
+                convertedPrice <= 0 && "text-muted-foreground",
               )}
             >
               {priceLabel}

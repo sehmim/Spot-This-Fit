@@ -1,0 +1,9 @@
+name = "spotthisfit-webhook"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+VERIFY_TOKEN = "SPOT_THIS_META_WEBHOOK_TOKEN_420_69"
+
+# APP_SECRET should be set as a secret, not a var:
+#   wrangler secret put APP_SECRET

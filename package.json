@@ -9,6 +9,14 @@
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "unrs-resolver",
+      "workerd"
+    ]
+  },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"

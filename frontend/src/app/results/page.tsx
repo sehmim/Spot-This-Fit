@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { getCurrencyLocale } from "@/lib/i18n";
 import { useLocale, useTranslations } from "@/components/i18n/locale-provider";
 import type { Product, ApiResponse } from "@spotthisfit/shared";
+import { useCurrencyStore, type Currency } from "@/stores/currency-store";
 
 const MIN_MAIN_PRODUCTS = 4;
 const SUGGESTION_PAGE_SIZE = 24;
@@ -40,20 +41,26 @@ function SimilarProductCard({
   const { locale } = useLocale();
   const t = useTranslations();
   const setSelectedProduct = useResultsStore((s) => s.setSelectedProduct);
+  const displayCurrency = useCurrencyStore((s) => s.currency);
+  const convert = useCurrencyStore((s) => s.convert);
+  const convertedPrice = convert(product.price, product.currency);
+  const convertedOriginal = product.originalPrice
+    ? convert(product.originalPrice, product.currency)
+    : undefined;
   const formatter = new Intl.NumberFormat(
-    getCurrencyLocale(locale, product.currency),
+    getCurrencyLocale(locale, displayCurrency),
     {
       style: "currency",
-      currency: product.currency,
+      currency: displayCurrency,
     },
   );
   const priceLabel =
-    product.price > 0
-      ? formatter.format(product.price)
+    convertedPrice > 0
+      ? formatter.format(convertedPrice)
       : t("results.priceUnavailable");
   const originalLabel =
-    product.originalPrice && product.originalPrice > product.price
-      ? formatter.format(product.originalPrice)
+    convertedOriginal && convertedOriginal > convertedPrice
+      ? formatter.format(convertedOriginal)
       : null;
 
   return (
@@ -92,7 +99,7 @@ function SimilarProductCard({
             <span
               className={cn(
                 "text-xs font-semibold sm:text-sm",
-                product.price <= 0 && "text-muted-foreground",
+                convertedPrice <= 0 && "text-muted-foreground",
               )}
             >
               {priceLabel}
@@ -106,6 +113,23 @@ function SimilarProductCard({
         </CardContent>
       </Card>
     </button>
+  );
+}
+
+function CurrencySelector() {
+  const currency = useCurrencyStore((s) => s.currency);
+  const setCurrency = useCurrencyStore((s) => s.setCurrency);
+  return (
+    <select
+      className="rounded-md border bg-transparent px-2 py-1 text-xs"
+      value={currency}
+      onChange={(e) => setCurrency(e.target.value as Currency)}
+    >
+      <option value="USD">USD ($)</option>
+      <option value="CAD">CAD (C$)</option>
+      <option value="GBP">GBP (&pound;)</option>
+      <option value="EUR">EUR (&euro;)</option>
+    </select>
   );
 }
 
@@ -384,15 +408,18 @@ export default function ResultsPage() {
                   {t("results.similarProducts.subtitle")}
                 </p>
               </div>
-              <select
-                className="shrink-0 rounded-md border bg-transparent px-2 py-1 text-xs"
-                value={sortBy}
-                onChange={(event) => setSortBy(event.target.value)}
-              >
-                <option value="relevance">{t("results.sortRelevance")}</option>
-                <option value="price_asc">{t("results.sortPriceLow")}</option>
-                <option value="price_desc">{t("results.sortPriceHigh")}</option>
-              </select>
+              <div className="flex shrink-0 items-center gap-2">
+                <CurrencySelector />
+                <select
+                  className="rounded-md border bg-transparent px-2 py-1 text-xs"
+                  value={sortBy}
+                  onChange={(event) => setSortBy(event.target.value)}
+                >
+                  <option value="relevance">{t("results.sortRelevance")}</option>
+                  <option value="price_asc">{t("results.sortPriceLow")}</option>
+                  <option value="price_desc">{t("results.sortPriceHigh")}</option>
+                </select>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-4">

@@ -7,6 +7,7 @@ import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LocaleProvider } from "@/components/i18n/locale-provider";
 import { CookieConsent } from "@/components/layout/cookie-consent";
+import { CurrencyLoader } from "@/components/layout/currency-loader";
 import { HotjarScript } from "@/components/layout/hotjar-script";
 import { createTranslator } from "@/lib/i18n";
 import { getLocaleFromCookies } from "@/lib/i18n-server";
@@ -92,6 +93,7 @@ export default async function RootLayout({
             <Footer />
             <Toaster position="top-center" richColors />
             <CookieConsent />
+            <CurrencyLoader />
           </TooltipProvider>
         </LocaleProvider>
       </body>
