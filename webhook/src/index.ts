@@ -4,6 +4,10 @@ interface Env {
   PAGE_ACCESS_TOKEN: string;
 }
 
+// Track processed message IDs to prevent duplicate processing.
+// Instagram re-delivers the same webhook when processing takes too long.
+const processedMessages = new Set<string>();
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -70,7 +74,31 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
         const senderId = event.sender?.id;
         const message = event.message;
 
-        if (message?.attachments) {
+        // Skip non-message events (read receipts, delivery confirmations, etc.)
+        if (!message) {
+          console.log("Skipping non-message event");
+          continue;
+        }
+
+        // Skip echo messages (sent by the bot itself) to prevent infinite loops
+        if (message.is_echo) {
+          console.log("Skipping echo message");
+          continue;
+        }
+
+        // Deduplicate: Instagram re-delivers the same message when processing is slow
+        const mid = message.mid;
+        if (mid && processedMessages.has(mid)) {
+          console.log(`Skipping already-processed message: ${mid}`);
+          continue;
+        }
+        if (mid) {
+          processedMessages.add(mid);
+          // Prevent the set from growing forever — clean up after 10 minutes
+          setTimeout(() => processedMessages.delete(mid), 10 * 60 * 1000);
+        }
+
+        if (message.attachments) {
           for (const attachment of message.attachments) {
             if (["ig_reel", "share", "link"].includes(attachment.type)) {
               const contentUrl = attachment.payload?.url;
@@ -117,12 +145,45 @@ const VECTORIZE_API = "https://vertorize-img-get-similar-products.shadidhaque201
 /**
  * Take a permalink, screenshot it, vectorize each frame, and reply with results link.
  */
+async function sendTextReply(
+  recipientId: string,
+  text: string,
+  env: Env
+): Promise<void> {
+  const response = await fetch(
+    `https://graph.instagram.com/v22.0/me/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.PAGE_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: { text },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error(`Failed to send text reply: ${response.status} ${error}`);
+  }
+}
+
 async function processAndReply(
   senderId: string,
   permalink: string,
   env: Env
 ): Promise<void> {
   try {
+    // Send an immediate acknowledgement
+    await sendTextReply(
+      senderId,
+      "We received your message! Currently finding products with great deals for you...",
+      env
+    );
+
     // Step 1: Screenshot the reel/post
     console.log(`Screenshotting: ${permalink}`);
     const screenshotRes = await fetch(SCREENSHOT_API, {
@@ -130,7 +191,7 @@ async function processAndReply(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         url: permalink,
-        count: 9,
+        count: 3,
         prefix: "insta",
       }),
     });
