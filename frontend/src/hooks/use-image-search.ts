@@ -8,7 +8,7 @@ const VECTORIZE_URL =
 
 type SearchStage = "idle" | "analyzing" | "finding_matches" | "done" | "error";
 
-interface WorkerProduct {
+export interface WorkerProduct {
   id: string;
   data: string; // JSON-encoded product data
 }
@@ -50,7 +50,7 @@ function inferCategory(title: string): ProductCategory {
   return "other";
 }
 
-function mapWorkerProduct(wp: WorkerProduct, index: number): Product {
+export function mapWorkerProduct(wp: WorkerProduct, index: number): Product {
   const data: ParsedProductData = JSON.parse(wp.data);
   const { amount: price, currency } = parsePrice(data.price);
   const { amount: salePrice } = parsePrice(data.sale_price);

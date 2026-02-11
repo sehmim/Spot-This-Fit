@@ -14,8 +14,6 @@ import { ShareButton } from "@/components/results/share-button";
 import { FindMoreCta } from "@/components/results/find-more-cta";
 import { VideoFrameStrip } from "@/components/results/video-frame-strip";
 import { useImageSearch } from "@/hooks/use-image-search";
-import { useVideoFrames } from "@/hooks/use-video-frames";
-import { saveVideoSearch } from "@/lib/video-search-db";
 import { Button } from "@/components/ui/button";
 import { PageTransition } from "@/components/layout/page-transition";
 import { Card, CardContent } from "@/components/ui/card";
@@ -184,11 +182,14 @@ function ResultsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryId = searchParams.get("q");
-  const videoUrlParam = searchParams.get("url");
-  const hasVideoUrlParam = videoUrlParam?.startsWith("https://lookaside.fbsbx.com") ?? false;
-  const videoFramesHook = useVideoFrames();
-  const hasStartedVideoUrl = useRef(false);
+  const runId = searchParams.get("id");
+  const keysParam = searchParams.get("keys");
+  const hasRunIdParam = Boolean(runId && keysParam);
+  const hasLoadedRunId = useRef(false);
   const t = useTranslations();
+
+  const SCREENSHOT_WORKER = "https://instag-playwright.shadidhaque2014.workers.dev";
+  const RESULTS_WORKER = "https://vertorize-img-results.shadidhaque2014.workers.dev";
 
   const hasVideoFrames = videoFrames.length > 0;
 
@@ -218,52 +219,42 @@ function ResultsPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryId]);
 
-  // Extract frames from video when ?url= param is a lookaside.fbsbx.com URL
+  // Load frames + products from ?id= and ?keys= params (webhook flow)
   useEffect(() => {
-    if (!hasVideoUrlParam || !videoUrlParam || hasStartedVideoUrl.current) return;
-    hasStartedVideoUrl.current = true;
+    if (!hasRunIdParam || !runId || !keysParam || hasLoadedRunId.current) return;
+    hasLoadedRunId.current = true;
     setFrameSearching(true);
 
-    (async () => {
-      // Check Firestore cache first
-      try {
-        const { getVideoSearchByUrl } = await import("@/lib/video-search-db");
-        const cached = await getVideoSearchByUrl(videoUrlParam);
-        if (cached) {
-          setVideoFrames(cached.frames);
-          const middleFrame = cached.frames[Math.floor(cached.frames.length / 2)];
-          setActiveFrame(middleFrame);
-          setSelectedFrame(middleFrame);
-          imageSearch.searchByUrl(middleFrame);
-          return;
-        }
-      } catch {
-        // Firestore check failed — proceed with worker
-      }
+    const keys = keysParam.split(",").map((k) => decodeURIComponent(k));
+    const frameUrls = keys.map((key) => `${SCREENSHOT_WORKER}/?key=${encodeURIComponent(key)}`);
+    setVideoFrames(frameUrls);
 
-      // Fetch frames from worker
-      await videoFramesHook.fetchFrames(videoUrlParam);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasVideoUrlParam, videoUrlParam]);
-
-  // When frames arrive from worker (via ?url= param), store them and start product search
-  useEffect(() => {
-    if (!hasVideoUrlParam || videoFramesHook.frames.length === 0 || hasVideoFrames) return;
-
-    const frames = videoFramesHook.frames;
-    setVideoFrames(frames);
-    const middleFrame = frames[Math.floor(frames.length / 2)];
+    const middleFrame = frameUrls[Math.floor(frameUrls.length / 2)];
     setActiveFrame(middleFrame);
     setSelectedFrame(middleFrame);
-    imageSearch.searchByUrl(middleFrame);
 
-    // Save to Firestore (fire-and-forget)
-    if (videoUrlParam) {
-      saveVideoSearch(videoUrlParam, frames).catch(() => {});
-    }
+    // Fetch pre-computed products by runId
+    (async () => {
+      try {
+        const res = await fetch(`${RESULTS_WORKER}/?id=${encodeURIComponent(runId)}`);
+        if (!res.ok) throw new Error("Failed to fetch results");
+        const data = await res.json() as {
+          ok: boolean;
+          data: { results: { products: Array<{ id: string; data: string }> } };
+        };
+        if (!data.ok) throw new Error("Results API error");
+
+        const { mapWorkerProduct } = await import("@/hooks/use-image-search");
+        const products = data.data.results.products.map((p, i) => mapWorkerProduct(p, i));
+        setProducts(products);
+        frameProductCache.current.set(middleFrame, products);
+        setFrameSearching(false);
+      } catch {
+        setFrameSearching(false);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoFramesHook.frames]);
+  }, [hasRunIdParam, runId, keysParam]);
 
   // Direct results from Pinecone image search (no streaming)
   const directProducts = useResultsStore((s) => s.streamedProducts);
@@ -319,10 +310,10 @@ function ResultsPageContent() {
   );
 
   useEffect(() => {
-    if (!searchId && !hasDirectResults && !queryId && !hasVideoUrlParam) {
+    if (!searchId && !hasDirectResults && !queryId && !hasRunIdParam) {
       router.replace("/");
     }
-  }, [searchId, hasDirectResults, queryId, hasVideoUrlParam, router]);
+  }, [searchId, hasDirectResults, queryId, hasRunIdParam, router]);
 
   const stream = useProductStream(searchId);
 
@@ -445,18 +436,18 @@ function ResultsPageContent() {
     return () => observer.disconnect();
   }, [fetchSuggestions]);
 
-  if (!searchId && !hasDirectResults && !queryId && !hasVideoUrlParam) return null;
+  if (!searchId && !hasDirectResults && !queryId && !hasRunIdParam) return null;
 
-  // Show loading state when extracting frames from ?url= param
-  if ((hasVideoUrlParam && videoFramesHook.isLoading) || (hasVideoUrlParam && !hasVideoFrames && !hasDirectResults)) {
+  // Show loading state when loading from ?id= param
+  if (hasRunIdParam && frameSearching && !hasDirectResults) {
     return (
       <PageTransition>
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-4">
           <div className="size-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           <div className="flex flex-col items-center gap-2 text-center">
-            <h2 className="text-lg font-semibold">Extracting video frames...</h2>
+            <h2 className="text-lg font-semibold">Loading your results...</h2>
             <p className="text-sm text-muted-foreground">
-              This may take a moment
+              Finding the best matches for you
             </p>
           </div>
         </div>

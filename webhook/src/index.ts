@@ -74,15 +74,17 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
           for (const attachment of message.attachments) {
             if (["ig_reel", "share", "link"].includes(attachment.type)) {
               const contentUrl = attachment.payload?.url;
+              const reelVideoId = attachment.payload?.reel_video_id;
               console.log("=== SHARED CONTENT DETECTED ===");
               console.log(`Sender: ${senderId}`);
               console.log(`Type: ${attachment.type}`);
               console.log(`URL: ${contentUrl}`);
-              console.log(`Reel Video ID: ${attachment.payload?.reel_video_id}`);
+              console.log(`Reel Video ID: ${reelVideoId}`);
               console.log(`Title: ${attachment.payload?.title}`);
 
-              const shopUrl = `https://www.spotthis.fit/results?url=${encodeURIComponent(contentUrl)}`;
-              await sendButtonReply(senderId, shopUrl, env);
+              if (contentUrl) {
+                await processAndReply(senderId, contentUrl, env);
+              }
             }
           }
         }
@@ -98,8 +100,7 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
             console.log(`Sender: ${senderId}`);
             console.log(`URL: ${contentUrl}`);
 
-            const shopUrl = `https://www.spotthis.fit/results?url=${encodeURIComponent(contentUrl)}`;
-            await sendButtonReply(senderId, shopUrl, env);
+            await processAndReply(senderId, contentUrl, env);
           }
         }
       }
@@ -108,6 +109,79 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
 
   // Meta requires a 200 response within 20 seconds
   return new Response("EVENT_RECEIVED", { status: 200 });
+}
+
+const SCREENSHOT_API = "https://instag-playwright.shadidhaque2014.workers.dev";
+const VECTORIZE_API = "https://vertorize-img-get-similar-products.shadidhaque2014.workers.dev";
+
+/**
+ * Take a permalink, screenshot it, vectorize each frame, and reply with results link.
+ */
+async function processAndReply(
+  senderId: string,
+  permalink: string,
+  env: Env
+): Promise<void> {
+  try {
+    // Step 1: Screenshot the reel/post
+    console.log(`Screenshotting: ${permalink}`);
+    const screenshotRes = await fetch(SCREENSHOT_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: permalink,
+        count: 9,
+        prefix: "insta",
+      }),
+    });
+
+    if (!screenshotRes.ok) {
+      const err = await screenshotRes.text();
+      console.error(`Screenshot API failed: ${screenshotRes.status} ${err}`);
+      return;
+    }
+
+    const screenshotData: {
+      runId: string;
+      count: number;
+      keys: string[];
+    } = await screenshotRes.json();
+
+    const { runId, keys } = screenshotData;
+    console.log(`Screenshot done. runId: ${runId}, keys: ${keys.length}`);
+
+    // Step 2: Vectorize each screenshot in parallel
+    const vectorizePromises = keys.map((key) => {
+      const imgUrl = `${SCREENSHOT_API}/?key=${key}`;
+      console.log(`Vectorizing: ${imgUrl}`);
+      return fetch(VECTORIZE_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: runId,
+          img_url: imgUrl,
+          top_k: 15,
+        }),
+      }).then(async (res) => {
+        if (!res.ok) {
+          const err = await res.text();
+          console.error(`Vectorize failed for ${key}: ${res.status} ${err}`);
+        } else {
+          console.log(`Vectorized: ${key}`);
+        }
+      });
+    });
+
+    await Promise.all(vectorizePromises);
+
+    // Step 3: Reply with results link (include keys as comma-separated param)
+    const keysParam = keys.map((k) => encodeURIComponent(k)).join(",");
+    const shopUrl = `https://www.spotthis.fit/results?id=${runId}&keys=${keysParam}`;
+    console.log(`Results URL: ${shopUrl}`);
+    await sendButtonReply(senderId, shopUrl, env);
+  } catch (err) {
+    console.error(`processAndReply error: ${err}`);
+  }
 }
 
 /**
