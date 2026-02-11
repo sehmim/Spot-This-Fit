@@ -158,6 +158,11 @@ function DetectedItemCard({ product }: { product: Product }) {
 }
 
 function ResultsPageContent() {
+  // Scroll to top on mount — Next.js client navigation preserves scroll position
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const searchId = useSearchStore((s) => s.searchId);
   const sourceImage = useSearchStore((s) => s.selectedFrame);
   const videoFrames = useSearchStore((s) => s.videoFrames);
