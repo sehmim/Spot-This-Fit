@@ -367,7 +367,7 @@ function ResultsPageContent() {
       merged.push(item);
     }
     return merged;
-  }, [mainProducts, suggestions]);
+  }, [products, suggestions]);
 
   const sortedProducts = useMemo(() => {
     if (sortBy === "price_asc") {

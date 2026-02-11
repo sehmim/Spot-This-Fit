@@ -9,7 +9,7 @@ interface Env {
 const processedMessages = new Set<string>();
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (request.method === "GET") {
@@ -17,7 +17,7 @@ export default {
     }
 
     if (request.method === "POST") {
-      return handleWebhook(request, env);
+      return handleWebhook(request, env, ctx);
     }
 
     return new Response("Method not allowed", { status: 405 });
@@ -43,7 +43,7 @@ function handleVerification(url: URL, env: Env): Response {
 /**
  * Receive and log Instagram messaging webhook payloads.
  */
-async function handleWebhook(request: Request, env: Env): Promise<Response> {
+async function handleWebhook(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const body = await request.text();
 
   // Validate signature if APP_SECRET is configured
@@ -66,6 +66,9 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
   // Log the full payload for analysis
   console.log("=== INSTAGRAM WEBHOOK PAYLOAD ===");
   console.log(JSON.stringify(payload, null, 2));
+
+  // Collect background tasks so we can return 200 immediately
+  const tasks: Promise<void>[] = [];
 
   // Walk through entries and look for shared content (reels/posts)
   if (payload.object === "instagram") {
@@ -94,8 +97,6 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
         }
         if (mid) {
           processedMessages.add(mid);
-          // Prevent the set from growing forever — clean up after 10 minutes
-          setTimeout(() => processedMessages.delete(mid), 10 * 60 * 1000);
         }
 
         if (message.attachments) {
@@ -111,7 +112,7 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
               console.log(`Title: ${attachment.payload?.title}`);
 
               if (contentUrl) {
-                await processAndReply(senderId, contentUrl, env);
+                tasks.push(processAndReply(senderId, contentUrl, env));
               }
             }
           }
@@ -128,14 +129,20 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
             console.log(`Sender: ${senderId}`);
             console.log(`URL: ${contentUrl}`);
 
-            await processAndReply(senderId, contentUrl, env);
+            tasks.push(processAndReply(senderId, contentUrl, env));
           }
         }
       }
     }
   }
 
-  // Meta requires a 200 response within 20 seconds
+  // Run processing in the background so we return 200 immediately.
+  // ctx.waitUntil keeps the worker alive until the promises resolve.
+  if (tasks.length > 0) {
+    ctx.waitUntil(Promise.all(tasks));
+  }
+
+  // Meta requires a 200 response within 20 seconds — now we return instantly
   return new Response("EVENT_RECEIVED", { status: 200 });
 }
 
