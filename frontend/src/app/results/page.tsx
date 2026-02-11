@@ -219,11 +219,10 @@ function ResultsPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryId]);
 
-  // Load frames + products from ?id= and ?keys= params (webhook flow)
+  // Load frames from ?id= + ?keys= params, then search for products via image
   useEffect(() => {
-    if (!hasRunIdParam || !runId || !keysParam || hasLoadedRunId.current) return;
+    if (!runId || !keysParam || hasLoadedRunId.current) return;
     hasLoadedRunId.current = true;
-    setFrameSearching(true);
 
     const keys = keysParam.split(",").map((k) => decodeURIComponent(k));
     const frameUrls = keys.map((key) => `${SCREENSHOT_WORKER}/?key=${encodeURIComponent(key)}`);
@@ -232,29 +231,10 @@ function ResultsPageContent() {
     const middleFrame = frameUrls[Math.floor(frameUrls.length / 2)];
     setActiveFrame(middleFrame);
     setSelectedFrame(middleFrame);
-
-    // Fetch pre-computed products by runId
-    (async () => {
-      try {
-        const res = await fetch(`${RESULTS_WORKER}/?id=${encodeURIComponent(runId)}`);
-        if (!res.ok) throw new Error("Failed to fetch results");
-        const data = await res.json() as {
-          ok: boolean;
-          data: { results: { products: Array<{ id: string; data: string }> } };
-        };
-        if (!data.ok) throw new Error("Results API error");
-
-        const { mapWorkerProduct } = await import("@/hooks/use-image-search");
-        const products = data.data.results.products.map((p, i) => mapWorkerProduct(p, i));
-        setProducts(products);
-        frameProductCache.current.set(middleFrame, products);
-        setFrameSearching(false);
-      } catch {
-        setFrameSearching(false);
-      }
-    })();
+    setFrameSearching(true);
+    imageSearch.searchByUrl(middleFrame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasRunIdParam, runId, keysParam]);
+  }, [runId, keysParam]);
 
   // Direct results from Pinecone image search (no streaming)
   const directProducts = useResultsStore((s) => s.streamedProducts);
