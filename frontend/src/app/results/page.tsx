@@ -26,7 +26,7 @@ import { getVideoSearchById } from "@/lib/video-search-db";
 
 const MIN_MAIN_PRODUCTS = 4;
 const SUGGESTION_PAGE_SIZE = 24;
-const IMAGE_HEIGHT_CLASS = "h-[180px] sm:h-[260px] md:h-[300px] lg:h-[320px]";
+const IMAGE_HEIGHT_CLASS = "h-[240px] sm:h-[320px] md:h-[380px] lg:h-[420px]";
 
 type SuggestionResponse = ApiResponse<{
   products: Product[];
@@ -443,28 +443,6 @@ function ResultsPageContent() {
   return (
     <PageTransition>
       <div className={cn("px-3 py-4 sm:px-6 sm:py-6 lg:mx-auto lg:max-w-6xl", hasVideoFrames && "pb-28")}>
-        {/* Mobile: compact header with source image + status */}
-        <div className="mb-4 flex items-center gap-3 lg:hidden">
-          {sourceImage && (
-            <div className="size-14 shrink-0 overflow-hidden rounded-lg border bg-muted/30">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={sourceImage}
-                alt="Source"
-                className="h-full w-full object-cover"
-              />
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <SearchStatus
-              status={streamStatus}
-              isStreaming={isStreaming}
-              retailersSearched={retailersSearched}
-              streamComplete={streamComplete}
-            />
-          </div>
-        </div>
-
         {error && (
           <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/5 p-3 lg:hidden">
             <p className="text-sm font-medium text-destructive">{error}</p>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { locales } from "@/lib/i18n";
@@ -12,6 +13,8 @@ import { Button } from "@/components/ui/button";
 export function Header() {
   const { locale, setLocale } = useLocale();
   const t = useTranslations();
+  const pathname = usePathname();
+  const isResultsPage = pathname === "/results";
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -53,12 +56,14 @@ export function Header() {
           >
             {t("header.blog")}
           </Link>
-          <Button size="sm" className="gap-1.5 rounded-full cursor-pointer" asChild>
-            <Link href="/search">
-              {t("landing.cta.button")}
-              <ArrowRight className="size-3.5" />
-            </Link>
-          </Button>
+          {!isResultsPage && (
+            <Button size="sm" className="gap-1.5 rounded-full cursor-pointer" asChild>
+              <Link href="/search">
+                {t("landing.cta.button")}
+                <ArrowRight className="size-3.5" />
+              </Link>
+            </Button>
+          )}
           <div ref={dropdownRef} className="relative">
             <button
               type="button"

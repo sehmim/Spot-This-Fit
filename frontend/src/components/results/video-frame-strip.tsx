@@ -35,7 +35,7 @@ export function VideoFrameStrip({
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 backdrop-blur-sm">
-      <div className="relative mx-auto max-w-3xl px-3 py-3">
+      <div className="relative mx-auto max-w-3xl px-3 py-3 sm:py-3">
         {isLoading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
             <Loader2 className="size-5 animate-spin text-primary" />
@@ -43,7 +43,7 @@ export function VideoFrameStrip({
         )}
         <div
           ref={scrollRef}
-          className="flex items-center gap-2 overflow-x-auto scrollbar-none"
+          className="flex items-center gap-3 overflow-x-auto scrollbar-none sm:gap-2"
         >
           {frames.map((url) => {
             const isActive = activeFrame === url;
@@ -64,7 +64,7 @@ export function VideoFrameStrip({
                 <img
                   src={url}
                   alt="Video frame"
-                  className="h-16 w-10 object-cover sm:h-20 sm:w-[52px]"
+                  className="h-36 w-24 object-cover sm:h-20 sm:w-[52px]"
                 />
               </button>
             );

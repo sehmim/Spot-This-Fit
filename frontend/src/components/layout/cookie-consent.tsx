@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Cookie, ChevronDown, ChevronUp } from "lucide-react";
@@ -34,6 +35,7 @@ export function getCookieConsent(): CookiePreferences | null {
 }
 
 export function CookieConsent() {
+  const pathname = usePathname();
   const [visible, setVisible] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [analytics, setAnalytics] = useState(true);
@@ -45,6 +47,9 @@ export function CookieConsent() {
       setVisible(true);
     }
   }, []);
+
+  // Hide cookie banner on the results page
+  if (pathname === "/results") return null;
 
   const handleAcceptAll = useCallback(() => {
     storePreferences({ necessary: true, analytics: true, marketing: true });

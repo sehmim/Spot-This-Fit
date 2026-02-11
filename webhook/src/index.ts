@@ -2,14 +2,18 @@ interface Env {
   VERIFY_TOKEN: string;
   APP_SECRET: string;
   PAGE_ACCESS_TOKEN: string;
+  PROCESSING_QUEUE: Queue;
 }
 
-// Track processed message IDs to prevent duplicate processing.
-// Instagram re-delivers the same webhook when processing takes too long.
-const processedMessages = new Set<string>();
+interface QueueMessage {
+  senderId: string;
+  contentUrl: string;
+  mid: string;
+}
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  // HTTP handler — receives webhooks, enqueues work, returns 200 instantly
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     if (request.method === "GET") {
@@ -17,10 +21,25 @@ export default {
     }
 
     if (request.method === "POST") {
-      return handleWebhook(request, env, ctx);
+      return handleWebhook(request, env);
     }
 
     return new Response("Method not allowed", { status: 405 });
+  },
+
+  // Queue consumer — processes reel screenshots/vectorization with no time pressure
+  async queue(batch: MessageBatch<QueueMessage>, env: Env): Promise<void> {
+    for (const msg of batch.messages) {
+      const { senderId, contentUrl } = msg.body;
+      console.log(`Queue processing reel for ${senderId}`);
+      try {
+        await processAndReply(senderId, contentUrl, env);
+        msg.ack();
+      } catch (err) {
+        console.error(`Queue processing error: ${err}`);
+        msg.retry();
+      }
+    }
   },
 };
 
@@ -41,36 +60,28 @@ function handleVerification(url: URL, env: Env): Response {
 }
 
 /**
- * Receive and log Instagram messaging webhook payloads.
+ * Receive Instagram webhook, enqueue work, return 200 instantly.
  */
-async function handleWebhook(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+async function handleWebhook(request: Request, env: Env): Promise<Response> {
   const body = await request.text();
 
   // Validate signature if APP_SECRET is configured
   if (env.APP_SECRET) {
     const signature = request.headers.get("x-hub-signature-256");
     if (!signature) {
-      console.error("Missing x-hub-signature-256 header");
       return new Response("Unauthorized", { status: 401 });
     }
 
     const isValid = await verifySignature(body, signature, env.APP_SECRET);
     if (!isValid) {
-      console.error("Invalid signature");
       return new Response("Unauthorized", { status: 401 });
     }
   }
 
   const payload = JSON.parse(body);
 
-  // Log the full payload for analysis
-  console.log("=== INSTAGRAM WEBHOOK PAYLOAD ===");
-  console.log(JSON.stringify(payload, null, 2));
+  const messagesToEnqueue: QueueMessage[] = [];
 
-  // Collect background tasks so we can return 200 immediately
-  const tasks: Promise<void>[] = [];
-
-  // Walk through entries and look for shared content (reels/posts)
   if (payload.object === "instagram") {
     for (const entry of payload.entry ?? []) {
       for (const event of entry.messaging ?? []) {
@@ -78,41 +89,20 @@ async function handleWebhook(request: Request, env: Env, ctx: ExecutionContext):
         const message = event.message;
 
         // Skip non-message events (read receipts, delivery confirmations, etc.)
-        if (!message) {
-          console.log("Skipping non-message event");
-          continue;
-        }
+        if (!message) continue;
 
-        // Skip echo messages (sent by the bot itself) to prevent infinite loops
-        if (message.is_echo) {
-          console.log("Skipping echo message");
-          continue;
-        }
+        // Skip echo messages (sent by the bot itself)
+        if (message.is_echo) continue;
 
-        // Deduplicate: Instagram re-delivers the same message when processing is slow
         const mid = message.mid;
-        if (mid && processedMessages.has(mid)) {
-          console.log(`Skipping already-processed message: ${mid}`);
-          continue;
-        }
-        if (mid) {
-          processedMessages.add(mid);
-        }
 
         if (message.attachments) {
           for (const attachment of message.attachments) {
             if (["ig_reel", "share", "link"].includes(attachment.type)) {
               const contentUrl = attachment.payload?.url;
-              const reelVideoId = attachment.payload?.reel_video_id;
-              console.log("=== SHARED CONTENT DETECTED ===");
-              console.log(`Sender: ${senderId}`);
-              console.log(`Type: ${attachment.type}`);
-              console.log(`URL: ${contentUrl}`);
-              console.log(`Reel Video ID: ${reelVideoId}`);
-              console.log(`Title: ${attachment.payload?.title}`);
-
               if (contentUrl) {
-                tasks.push(processAndReply(senderId, contentUrl, env));
+                console.log(`Enqueuing reel from ${senderId}`);
+                messagesToEnqueue.push({ senderId, contentUrl, mid });
               }
             }
           }
@@ -124,25 +114,21 @@ async function handleWebhook(request: Request, env: Env, ctx: ExecutionContext):
             /https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p|reels)\/[\w-]+/
           );
           if (igUrlMatch) {
-            const contentUrl = igUrlMatch[0];
-            console.log("=== INSTAGRAM LINK IN TEXT ===");
-            console.log(`Sender: ${senderId}`);
-            console.log(`URL: ${contentUrl}`);
-
-            tasks.push(processAndReply(senderId, contentUrl, env));
+            console.log(`Enqueuing IG link from ${senderId}`);
+            messagesToEnqueue.push({ senderId, contentUrl: igUrlMatch[0], mid });
           }
         }
       }
     }
   }
 
-  // Run processing in the background so we return 200 immediately.
-  // ctx.waitUntil keeps the worker alive until the promises resolve.
-  if (tasks.length > 0) {
-    ctx.waitUntil(Promise.all(tasks));
+  // Enqueue each message individually for background processing
+  if (messagesToEnqueue.length > 0) {
+    await env.PROCESSING_QUEUE.sendBatch(
+      messagesToEnqueue.map((m) => ({ body: m }))
+    );
   }
 
-  // Meta requires a 200 response within 20 seconds — now we return instantly
   return new Response("EVENT_RECEIVED", { status: 200 });
 }
 
@@ -152,6 +138,74 @@ const VECTORIZE_API = "https://vertorize-img-get-similar-products.shadidhaque201
 /**
  * Take a permalink, screenshot it, vectorize each frame, and reply with results link.
  */
+async function processAndReply(
+  senderId: string,
+  permalink: string,
+  env: Env
+): Promise<void> {
+  // Send an immediate acknowledgement
+  await sendTextReply(
+    senderId,
+    "We received your message! Currently finding products with great deals for you...",
+    env
+  );
+
+  // Step 1: Screenshot the reel/post
+  const screenshotRes = await fetch(SCREENSHOT_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url: permalink,
+      count: 6,
+      prefix: "insta",
+    }),
+  });
+
+  if (!screenshotRes.ok) {
+    const err = await screenshotRes.text();
+    console.error(`Screenshot API failed: ${screenshotRes.status} ${err}`);
+    return;
+  }
+
+  const screenshotData: {
+    runId: string;
+    count: number;
+    keys: string[];
+  } = await screenshotRes.json();
+
+  const { runId, keys } = screenshotData;
+  console.log(`Screenshot done. runId: ${runId}, keys: ${keys.length}`);
+
+  // Step 2: Vectorize each screenshot in parallel
+  const vectorizePromises = keys.map((key) => {
+    const imgUrl = `${SCREENSHOT_API}/?key=${key}`;
+    return fetch(VECTORIZE_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: runId,
+        img_url: imgUrl,
+        top_k: 15,
+      }),
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = await res.text();
+        console.error(`Vectorize failed for ${key}: ${res.status} ${err}`);
+      } else {
+        console.log(`Vectorized: ${key}`);
+      }
+    });
+  });
+
+  await Promise.all(vectorizePromises);
+
+  // Step 3: Reply with results link
+  const keysParam = keys.map((k) => encodeURIComponent(k)).join(",");
+  const shopUrl = `https://www.spotthis.fit/results?id=${runId}&keys=${keysParam}`;
+  console.log(`Results URL: ${shopUrl}`);
+  await sendButtonReply(senderId, shopUrl, env);
+}
+
 async function sendTextReply(
   recipientId: string,
   text: string,
@@ -175,80 +229,6 @@ async function sendTextReply(
   if (!response.ok) {
     const error = await response.text();
     console.error(`Failed to send text reply: ${response.status} ${error}`);
-  }
-}
-
-async function processAndReply(
-  senderId: string,
-  permalink: string,
-  env: Env
-): Promise<void> {
-  try {
-    // Send an immediate acknowledgement
-    await sendTextReply(
-      senderId,
-      "We received your message! Currently finding products with great deals for you...",
-      env
-    );
-
-    // Step 1: Screenshot the reel/post
-    console.log(`Screenshotting: ${permalink}`);
-    const screenshotRes = await fetch(SCREENSHOT_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: permalink,
-        count: 3,
-        prefix: "insta",
-      }),
-    });
-
-    if (!screenshotRes.ok) {
-      const err = await screenshotRes.text();
-      console.error(`Screenshot API failed: ${screenshotRes.status} ${err}`);
-      return;
-    }
-
-    const screenshotData: {
-      runId: string;
-      count: number;
-      keys: string[];
-    } = await screenshotRes.json();
-
-    const { runId, keys } = screenshotData;
-    console.log(`Screenshot done. runId: ${runId}, keys: ${keys.length}`);
-
-    // Step 2: Vectorize each screenshot in parallel
-    const vectorizePromises = keys.map((key) => {
-      const imgUrl = `${SCREENSHOT_API}/?key=${key}`;
-      console.log(`Vectorizing: ${imgUrl}`);
-      return fetch(VECTORIZE_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: runId,
-          img_url: imgUrl,
-          top_k: 15,
-        }),
-      }).then(async (res) => {
-        if (!res.ok) {
-          const err = await res.text();
-          console.error(`Vectorize failed for ${key}: ${res.status} ${err}`);
-        } else {
-          console.log(`Vectorized: ${key}`);
-        }
-      });
-    });
-
-    await Promise.all(vectorizePromises);
-
-    // Step 3: Reply with results link (include keys as comma-separated param)
-    const keysParam = keys.map((k) => encodeURIComponent(k)).join(",");
-    const shopUrl = `https://www.spotthis.fit/results?id=${runId}&keys=${keysParam}`;
-    console.log(`Results URL: ${shopUrl}`);
-    await sendButtonReply(senderId, shopUrl, env);
-  } catch (err) {
-    console.error(`processAndReply error: ${err}`);
   }
 }
 
@@ -277,8 +257,8 @@ async function sendButtonReply(
               template_type: "generic",
               elements: [
                 {
-                  title: "We received your message!",
-                  subtitle: "Checkout what we found",
+                  title: "We found some great deals!",
+                  subtitle: "Checkout what we found for you",
                   buttons: [
                     {
                       type: "web_url",
