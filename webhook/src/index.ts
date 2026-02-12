@@ -3,13 +3,36 @@ interface Env {
   APP_SECRET: string;
   PAGE_ACCESS_TOKEN: string;
   PROCESSING_QUEUE: Queue;
+  SIGHTENGINE_API_USER: string;
+  SIGHTENGINE_API_SECRET: string;
+  OPENAI_API_KEY: string;
+  RATE_LIMIT_KV: KVNamespace;
+}
+
+const DAILY_LIMIT = 5;
+
+/**
+ * Check if a user has exceeded their daily limit. Returns true if allowed.
+ */
+async function checkRateLimit(senderId: string, env: Env): Promise<boolean> {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const key = `rate:${senderId}:${today}`;
+  const current = parseInt((await env.RATE_LIMIT_KV.get(key)) ?? "0", 10);
+  if (current >= DAILY_LIMIT) return false;
+  await env.RATE_LIMIT_KV.put(key, String(current + 1), { expirationTtl: 86400 });
+  return true;
 }
 
 interface QueueMessage {
   senderId: string;
   contentUrl: string;
   mid: string;
+  mode: "ai_detect" | "products";
 }
+
+// Prefix used in quick_reply payloads to identify our choice buttons
+const PAYLOAD_PREFIX_AI = "SPOT_AI:";
+const PAYLOAD_PREFIX_PRODUCTS = "SPOT_PRODUCTS:";
 
 export default {
   // HTTP handler — receives webhooks, enqueues work, returns 200 instantly
@@ -30,10 +53,14 @@ export default {
   // Queue consumer — processes reel screenshots/vectorization with no time pressure
   async queue(batch: MessageBatch<QueueMessage>, env: Env): Promise<void> {
     for (const msg of batch.messages) {
-      const { senderId, contentUrl } = msg.body;
-      console.log(`Queue processing reel for ${senderId}`);
+      const { senderId, contentUrl, mode } = msg.body;
+      console.log(`Queue processing (${mode}) for ${senderId}`);
       try {
-        await processAndReply(senderId, contentUrl, env);
+        if (mode === "ai_detect") {
+          await processAiDetection(senderId, contentUrl, env);
+        } else {
+          await processAndReply(senderId, contentUrl, env);
+        }
         msg.ack();
       } catch (err) {
         console.error(`Queue processing error: ${err}`);
@@ -79,6 +106,7 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
   }
 
   const payload = JSON.parse(body);
+  console.log(`IG webhook payload: ${JSON.stringify(payload)}`);
 
   const messagesToEnqueue: QueueMessage[] = [];
 
@@ -95,28 +123,59 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
         if (message.is_echo) continue;
 
         const mid = message.mid;
+        console.log(`Message from ${senderId}: mid=${mid}, attachments=${JSON.stringify(message.attachments)}, text=${message.text}, quick_reply=${JSON.stringify(message.quick_reply)}`);
+
+        // Handle quick reply selections (user chose AI detect or Products)
+        if (message.quick_reply?.payload) {
+          const payload = message.quick_reply.payload as string;
+          if (payload.startsWith(PAYLOAD_PREFIX_AI)) {
+            const contentUrl = payload.slice(PAYLOAD_PREFIX_AI.length);
+            console.log(`User chose AI detect for: ${contentUrl}`);
+            messagesToEnqueue.push({ senderId, contentUrl, mid, mode: "ai_detect" });
+          } else if (payload.startsWith(PAYLOAD_PREFIX_PRODUCTS)) {
+            const contentUrl = payload.slice(PAYLOAD_PREFIX_PRODUCTS.length);
+            console.log(`User chose Products for: ${contentUrl}`);
+            messagesToEnqueue.push({ senderId, contentUrl, mid, mode: "products" });
+          }
+          continue;
+        }
+
+        // When user sends a reel/post, prompt them to choose
+        let contentUrl: string | null = null;
 
         if (message.attachments) {
           for (const attachment of message.attachments) {
+            console.log(`Attachment type=${attachment.type}, url=${attachment.payload?.url}`);
             if (["ig_reel", "share", "link"].includes(attachment.type)) {
-              const contentUrl = attachment.payload?.url;
-              if (contentUrl) {
-                console.log(`Enqueuing reel from ${senderId}`);
-                messagesToEnqueue.push({ senderId, contentUrl, mid });
-              }
+              contentUrl = attachment.payload?.url;
+              break;
             }
           }
         }
 
         // Instagram sometimes sends the reel URL as plain text
-        if (message?.text) {
+        if (!contentUrl && message?.text) {
           const igUrlMatch = message.text.match(
             /https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p|reels)\/[\w-]+/
           );
           if (igUrlMatch) {
-            console.log(`Enqueuing IG link from ${senderId}`);
-            messagesToEnqueue.push({ senderId, contentUrl: igUrlMatch[0], mid });
+            contentUrl = igUrlMatch[0];
           }
+        }
+
+        if (contentUrl) {
+          const allowed = await checkRateLimit(senderId, env);
+          if (!allowed) {
+            console.log(`Rate limit reached for ${senderId}`);
+            await sendTextReply(
+              senderId,
+              "You've reached your daily limit of 5 analyses. Try again tomorrow or contact us at https://www.spotthis.fit/contact",
+              env
+            );
+            continue;
+          }
+          console.log(`Sending choice buttons to ${senderId} for: ${contentUrl}`);
+          await sendChoiceButtons(senderId, contentUrl, env);
         }
       }
     }
@@ -134,6 +193,145 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
 
 const SCREENSHOT_API = "https://instag-playwright.shadidhaque2014.workers.dev";
 const VECTORIZE_API = "https://vertorize-img-get-similar-products.shadidhaque2014.workers.dev";
+const SIGHTENGINE_IMAGE_API = "https://api.sightengine.com/1.0/check.json";
+const OPENAI_API = "https://api.openai.com/v1/chat/completions";
+
+/**
+ * Screenshot the reel, analyze each frame with Sightengine image AI detection,
+ * summarize the overall AI percentage with GPT-4o, and reply.
+ */
+async function processAiDetection(
+  senderId: string,
+  contentUrl: string,
+  env: Env
+): Promise<void> {
+  await sendTextReply(
+    senderId,
+    "Analyzing your video for AI-generated content...",
+    env
+  );
+
+  // Step 1: Screenshot the reel/post (6 evenly spaced frames)
+  console.log(`Screenshotting: ${contentUrl}`);
+  const screenshotRes = await fetch(SCREENSHOT_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url: contentUrl,
+      count: 6,
+      prefix: "insta",
+    }),
+  });
+
+  if (!screenshotRes.ok) {
+    const err = await screenshotRes.text();
+    console.error(`Screenshot API failed: ${screenshotRes.status} ${err}`);
+    await sendTextReply(senderId, "Sorry, we couldn't process the video. Please try again.", env);
+    return;
+  }
+
+  const screenshotData: {
+    runId: string;
+    count: number;
+    keys: string[];
+  } = await screenshotRes.json();
+  console.log(`Screenshot done: ${screenshotData.keys.length} frames captured`);
+
+  const { keys } = screenshotData;
+
+  // Step 2: Analyze each frame with Sightengine (in parallel)
+  console.log("Sending frames to Sightengine...");
+  const results = await Promise.all(
+    keys.map(async (key, index) => {
+      const imgUrl = `${SCREENSHOT_API}/?key=${key}`;
+      const params = new URLSearchParams({
+        url: imgUrl,
+        models: "genai",
+        api_user: env.SIGHTENGINE_API_USER,
+        api_secret: env.SIGHTENGINE_API_SECRET,
+      });
+
+      const res = await fetch(`${SIGHTENGINE_IMAGE_API}?${params}`);
+      const resText = await res.text();
+
+      if (!res.ok) {
+        console.error(`Sightengine failed for frame ${index + 1}: ${res.status} ${resText}`);
+        return null;
+      }
+
+      const data: { status: string; type: { ai_generated: number } } = JSON.parse(resText);
+      console.log(`Frame ${index + 1}: ai_generated=${data.type?.ai_generated}`);
+
+      if (data.status !== "success") return null;
+      return data.type.ai_generated;
+    })
+  );
+
+  const scores = results.filter((s): s is number => s !== null);
+  if (scores.length === 0) {
+    await sendTextReply(senderId, "Sorry, we couldn't analyze this video. Please try again later.", env);
+    return;
+  }
+
+  // Step 3: Compute percentage of video that is AI-generated
+  const aiFrameCount = scores.filter((s) => s >= 0.5).length;
+  const aiPercentage = Math.round((aiFrameCount / scores.length) * 100);
+  const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+
+  console.log(`AI analysis: ${aiPercentage}% AI (${aiFrameCount}/${scores.length} frames), avg score: ${avgScore.toFixed(2)}`);
+
+  // Step 4: Summarize with GPT-4o
+  console.log("Sending to GPT-4o for summary...");
+  const gptRes = await fetch(OPENAI_API, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an AI detection analyst. Write a short, friendly Instagram DM response about whether a video is AI-generated. Do NOT mention frames, samples, or how the analysis was done. Just tell the user the result as if you analyzed the whole video.
+
+Format:
+
+🔍 AI Detection Report
+
+Verdict: [Likely AI-Generated / Partially AI / Likely Real]
+
+📊 Results:
+• Estimated AI content: X% of the video
+
+💡 [One sentence plain-English interpretation — e.g. "This video appears to be almost entirely generated by AI" or "This looks like authentic real footage"]`,
+        },
+        {
+          role: "user",
+          content: `AI percentage: ${aiPercentage}%, average confidence score: ${avgScore.toFixed(2)}`,
+        },
+      ],
+      max_tokens: 300,
+    }),
+  });
+
+  if (!gptRes.ok) {
+    const err = await gptRes.text();
+    console.error(`OpenAI API failed: ${gptRes.status} ${err}`);
+    await sendTextReply(senderId, "Sorry, we couldn't generate a summary. Please try again later.", env);
+    return;
+  }
+
+  const gptData: {
+    choices: Array<{ message: { content: string } }>;
+  } = await gptRes.json();
+
+  const summary = gptData.choices?.[0]?.message?.content ?? "Unable to generate summary.";
+  console.log(`GPT-4o summary: ${summary}`);
+
+  // Step 5: Send summary back to user
+  await sendTextReply(senderId, summary, env);
+}
 
 /**
  * Take a permalink, screenshot it, vectorize each frame, and reply with results link.
@@ -204,6 +402,51 @@ async function processAndReply(
   const shopUrl = `https://www.spotthis.fit/results?id=${runId}&keys=${keysParam}`;
   console.log(`Results URL: ${shopUrl}`);
   await sendButtonReply(senderId, shopUrl, env);
+}
+
+/**
+ * Send quick reply buttons letting user choose between AI detection and product spotting.
+ */
+async function sendChoiceButtons(
+  recipientId: string,
+  contentUrl: string,
+  env: Env
+): Promise<void> {
+  const response = await fetch(
+    `https://graph.instagram.com/v22.0/me/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.PAGE_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: {
+          text: "What would you like to do with this content?",
+          quick_replies: [
+            {
+              content_type: "text",
+              title: "🔍 Spot AI",
+              payload: `${PAYLOAD_PREFIX_AI}${contentUrl}`,
+            },
+            {
+              content_type: "text",
+              title: "🛍️ Spot Products",
+              payload: `${PAYLOAD_PREFIX_PRODUCTS}${contentUrl}`,
+            },
+          ],
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error(`Failed to send choice buttons: ${response.status} ${error}`);
+  } else {
+    console.log(`Choice buttons sent to ${recipientId}`);
+  }
 }
 
 async function sendTextReply(
