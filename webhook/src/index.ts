@@ -11,6 +11,9 @@ interface Env {
 
 const DAILY_LIMIT = 5;
 
+// Feature toggles — flip to true to re-enable
+const ENABLE_PRODUCTS = false;
+
 /**
  * Check if a user has exceeded their daily limit. Returns true if allowed.
  */
@@ -125,8 +128,8 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
         const mid = message.mid;
         console.log(`Message from ${senderId}: mid=${mid}, attachments=${JSON.stringify(message.attachments)}, text=${message.text}, quick_reply=${JSON.stringify(message.quick_reply)}`);
 
-        // Handle quick reply selections (user chose AI detect or Products)
-        if (message.quick_reply?.payload) {
+        // Handle quick reply selections (only active when products are enabled)
+        if (ENABLE_PRODUCTS && message.quick_reply?.payload) {
           const payload = message.quick_reply.payload as string;
           if (payload.startsWith(PAYLOAD_PREFIX_AI)) {
             const contentUrl = payload.slice(PAYLOAD_PREFIX_AI.length);
@@ -140,7 +143,7 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
           continue;
         }
 
-        // When user sends a reel/post, prompt them to choose
+        // Extract content URL from attachments or text
         let contentUrl: string | null = null;
 
         if (message.attachments) {
@@ -174,8 +177,16 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
             );
             continue;
           }
-          console.log(`Sending choice buttons to ${senderId} for: ${contentUrl}`);
-          await sendChoiceButtons(senderId, contentUrl, env);
+
+          if (ENABLE_PRODUCTS) {
+            // Show choice buttons when products feature is enabled
+            console.log(`Sending choice buttons to ${senderId} for: ${contentUrl}`);
+            await sendChoiceButtons(senderId, contentUrl, env);
+          } else {
+            // Go straight to AI detection
+            console.log(`Enqueuing AI detect for ${senderId}: ${contentUrl}`);
+            messagesToEnqueue.push({ senderId, contentUrl, mid, mode: "ai_detect" });
+          }
         }
       }
     }
@@ -193,12 +204,12 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
 
 const SCREENSHOT_API = "https://instag-playwright.shadidhaque2014.workers.dev";
 const VECTORIZE_API = "https://vertorize-img-get-similar-products.shadidhaque2014.workers.dev";
-const SIGHTENGINE_IMAGE_API = "https://api.sightengine.com/1.0/check.json";
+const SIGHTENGINE_VIDEO_API = "https://api.sightengine.com/1.0/video/check-sync.json";
 const OPENAI_API = "https://api.openai.com/v1/chat/completions";
 
 /**
- * Screenshot the reel, analyze each frame with Sightengine image AI detection,
- * summarize the overall AI percentage with GPT-4o, and reply.
+ * Fetch video from IG CDN, upload to Sightengine video AI detection,
+ * use GPT-4o to highlight which parts are AI-generated, and reply.
  */
 async function processAiDetection(
   senderId: string,
@@ -211,74 +222,85 @@ async function processAiDetection(
     env
   );
 
-  // Step 1: Screenshot the reel/post (6 evenly spaced frames)
-  console.log(`Screenshotting: ${contentUrl}`);
-  const screenshotRes = await fetch(SCREENSHOT_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      url: contentUrl,
-      count: 6,
-      prefix: "insta",
-    }),
+  // Step 1: Fetch video bytes from IG CDN
+  console.log(`Fetching video from IG CDN: ${contentUrl}`);
+  const videoRes = await fetch(contentUrl, {
+    headers: {
+      "User-Agent": "curl/8.0",
+    },
   });
 
-  if (!screenshotRes.ok) {
-    const err = await screenshotRes.text();
-    console.error(`Screenshot API failed: ${screenshotRes.status} ${err}`);
-    await sendTextReply(senderId, "Sorry, we couldn't process the video. Please try again.", env);
+  if (!videoRes.ok) {
+    console.error(`Failed to fetch video: ${videoRes.status} ${videoRes.statusText}`);
+    await sendTextReply(senderId, "Sorry, we couldn't download the video. Please try again.", env);
     return;
   }
 
-  const screenshotData: {
-    runId: string;
-    count: number;
-    keys: string[];
-  } = await screenshotRes.json();
-  console.log(`Screenshot done: ${screenshotData.keys.length} frames captured`);
+  const videoBuffer = await videoRes.arrayBuffer();
+  const sizeMB = (videoBuffer.byteLength / 1024 / 1024).toFixed(1);
+  const contentType = videoRes.headers.get("content-type");
+  console.log(`Video fetched: ${sizeMB}MB, content-type: ${contentType}`);
 
-  const { keys } = screenshotData;
-
-  // Step 2: Analyze each frame with Sightengine (in parallel)
-  console.log("Sending frames to Sightengine...");
-  const results = await Promise.all(
-    keys.map(async (key, index) => {
-      const imgUrl = `${SCREENSHOT_API}/?key=${key}`;
-      const params = new URLSearchParams({
-        url: imgUrl,
-        models: "genai",
-        api_user: env.SIGHTENGINE_API_USER,
-        api_secret: env.SIGHTENGINE_API_SECRET,
-      });
-
-      const res = await fetch(`${SIGHTENGINE_IMAGE_API}?${params}`);
-      const resText = await res.text();
-
-      if (!res.ok) {
-        console.error(`Sightengine failed for frame ${index + 1}: ${res.status} ${resText}`);
-        return null;
-      }
-
-      const data: { status: string; type: { ai_generated: number } } = JSON.parse(resText);
-      console.log(`Frame ${index + 1}: ai_generated=${data.type?.ai_generated}`);
-
-      if (data.status !== "success") return null;
-      return data.type.ai_generated;
-    })
-  );
-
-  const scores = results.filter((s): s is number => s !== null);
-  if (scores.length === 0) {
-    await sendTextReply(senderId, "Sorry, we couldn't analyze this video. Please try again later.", env);
+  if (videoBuffer.byteLength < 1000 || contentType?.includes("text/html")) {
+    console.error("Video fetch returned HTML or empty body — CDN URL may require browser access");
+    await sendTextReply(senderId, "Sorry, we couldn't download the video. Please try again.", env);
     return;
   }
 
-  // Step 3: Compute percentage of video that is AI-generated
+  // Step 2: Upload to Sightengine video AI detection
+  console.log("Uploading video to Sightengine...");
+  const formData = new FormData();
+  formData.append("media", new Blob([videoBuffer], { type: "video/mp4" }), "video.mp4");
+  formData.append("models", "genai");
+  formData.append("api_user", env.SIGHTENGINE_API_USER);
+  formData.append("api_secret", env.SIGHTENGINE_API_SECRET);
+
+  const sightRes = await fetch(SIGHTENGINE_VIDEO_API, {
+    method: "POST",
+    body: formData,
+  });
+  const sightText = await sightRes.text();
+  console.log(`Sightengine response: ${sightText}`);
+
+  if (!sightRes.ok) {
+    console.error(`Sightengine API failed: ${sightRes.status} ${sightText}`);
+    await sendTextReply(senderId, "Sorry, the AI analysis failed. Please try again later.", env);
+    return;
+  }
+
+  const sightData: {
+    status: string;
+    data: {
+      frames: Array<{
+        info: { id: string; position: number };
+        type: { ai_generated: number };
+      }>;
+    };
+  } = JSON.parse(sightText);
+
+  if (sightData.status !== "success" || !sightData.data?.frames?.length) {
+    console.error(`Sightengine unexpected response: ${sightText}`);
+    await sendTextReply(senderId, "Sorry, we couldn't analyze this video. It may not be supported.", env);
+    return;
+  }
+
+  const frames = sightData.data.frames;
+  console.log(`Sightengine analyzed ${frames.length} frames`);
+
+  // Step 3: Compute metrics
+  const scores = frames.map((f) => f.type.ai_generated);
   const aiFrameCount = scores.filter((s) => s >= 0.5).length;
   const aiPercentage = Math.round((aiFrameCount / scores.length) * 100);
-  const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
 
-  console.log(`AI analysis: ${aiPercentage}% AI (${aiFrameCount}/${scores.length} frames), avg score: ${avgScore.toFixed(2)}`);
+  // Build timeline data (position is in milliseconds)
+  const timeline = frames.map((f) => {
+    const totalSecs = Math.floor(f.info.position / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")} → ${f.type.ai_generated.toFixed(2)} (${f.type.ai_generated >= 0.5 ? "AI" : "Real"})`;
+  });
+
+  console.log(`AI analysis: ${aiPercentage}% AI, timeline: ${timeline.join(", ")}`);
 
   // Step 4: Summarize with GPT-4o
   console.log("Sending to GPT-4o for summary...");
@@ -293,25 +315,33 @@ async function processAiDetection(
       messages: [
         {
           role: "system",
-          content: `You are an AI detection analyst. Write a short, friendly Instagram DM response about whether a video is AI-generated. Do NOT mention frames, samples, or how the analysis was done. Just tell the user the result as if you analyzed the whole video.
+          content: `You are an AI detection analyst. Give a definitive answer about whether a video contains AI-generated content. Do NOT say "likely" or "possibly". Be certain. Do NOT mention frames or sampling methodology.
 
-Format:
+Rules for your verdict:
+- If AI percentage > 20%: Answer is YES, there is AI-generated content
+- If AI percentage is 1-20%: Answer is PARTIAL, there is some AI-generated content
+- If AI percentage is 0%: Answer is NO, this is not AI-generated
+
+You are also given a timeline showing which parts of the video are AI vs Real. Highlight the AI-generated sections using timestamps.
+
+Format exactly:
 
 🔍 AI Detection Report
 
-Verdict: [Likely AI-Generated / Partially AI / Likely Real]
+Verdict: [YES - AI Generated / PARTIAL - Some AI Content / NO - Not AI Generated]
+AI Content: X%
 
-📊 Results:
-• Estimated AI content: X% of the video
+🕐 Timeline:
+[Group consecutive AI or Real sections into ranges, e.g. "0:00 - 0:04 → AI" and "0:06 - 0:08 → Real". Keep it concise.]
 
-💡 [One sentence plain-English interpretation — e.g. "This video appears to be almost entirely generated by AI" or "This looks like authentic real footage"]`,
+💡 [One confident sentence summarizing the result]`,
         },
         {
           role: "user",
-          content: `AI percentage: ${aiPercentage}%, average confidence score: ${avgScore.toFixed(2)}`,
+          content: `AI percentage: ${aiPercentage}%\n\nTimeline:\n${timeline.join("\n")}`,
         },
       ],
-      max_tokens: 300,
+      max_tokens: 400,
     }),
   });
 
@@ -354,7 +384,7 @@ async function processAndReply(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       url: permalink,
-      count: 6,
+      count: 7,
       prefix: "insta",
     }),
   });
