@@ -227,6 +227,9 @@ function ResultsPageContent() {
   // Load frames + cached results from ?id= + ?keys= params (webhook / preview flow)
   // The webhook already vectorized all frames and saved results to D1 via the Results Worker.
   // We fetch from D1 instead of re-vectorizing.
+  // If the store already has products (e.g. navigated from preview), skip the fetch.
+  const storeHasProducts = useResultsStore((s) => s.streamedProducts.length > 0);
+
   useEffect(() => {
     if (!runId || !keysParam || hasLoadedRunId.current) return;
     hasLoadedRunId.current = true;
@@ -238,6 +241,10 @@ function ResultsPageContent() {
     const middleFrame = frameUrls[Math.floor(frameUrls.length / 2)];
     setActiveFrame(middleFrame);
     setSelectedFrame(middleFrame);
+
+    // If the preview page already loaded products into the store, just use those
+    if (storeHasProducts) return;
+
     setFrameSearching(true);
 
     // Try fetching cached results from D1, fall back to live vectorization
@@ -670,9 +677,25 @@ function ResultsPageContent() {
   );
 }
 
+function ResultsPageFallback() {
+  return (
+    <PageTransition>
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-4">
+        <div className="size-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="flex flex-col items-center gap-2 text-center">
+          <h2 className="text-lg font-semibold">Loading your results...</h2>
+          <p className="text-sm text-muted-foreground">
+            Finding the best matches for you
+          </p>
+        </div>
+      </div>
+    </PageTransition>
+  );
+}
+
 export default function ResultsPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<ResultsPageFallback />}>
       <ResultsPageContent />
     </Suspense>
   );
