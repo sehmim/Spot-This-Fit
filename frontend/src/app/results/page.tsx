@@ -13,7 +13,7 @@ import { SaveAllButton } from "@/components/results/save-all-button";
 import { ShareButton } from "@/components/results/share-button";
 import { FindMoreCta } from "@/components/results/find-more-cta";
 import { VideoFrameStrip } from "@/components/results/video-frame-strip";
-import { useImageSearch } from "@/hooks/use-image-search";
+import { useImageSearch, mapWorkerProduct } from "@/hooks/use-image-search";
 import { Button } from "@/components/ui/button";
 import { PageTransition } from "@/components/layout/page-transition";
 import { Card, CardContent } from "@/components/ui/card";
@@ -224,7 +224,9 @@ function ResultsPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryId]);
 
-  // Load frames from ?id= + ?keys= params, then search for products via image
+  // Load frames + cached results from ?id= + ?keys= params (webhook / preview flow)
+  // The webhook already vectorized all frames and saved results to D1 via the Results Worker.
+  // We fetch from D1 instead of re-vectorizing.
   useEffect(() => {
     if (!runId || !keysParam || hasLoadedRunId.current) return;
     hasLoadedRunId.current = true;
@@ -237,7 +239,30 @@ function ResultsPageContent() {
     setActiveFrame(middleFrame);
     setSelectedFrame(middleFrame);
     setFrameSearching(true);
-    imageSearch.searchByUrl(middleFrame);
+
+    // Try fetching cached results from D1, fall back to live vectorization
+    (async () => {
+      try {
+        const res = await fetch(`${RESULTS_WORKER}/?id=${encodeURIComponent(runId)}`);
+        if (res.ok) {
+          const data = await res.json() as {
+            ok: boolean;
+            data?: { results: { products: Array<{ id: string; data: string }> } };
+          };
+          if (data.ok && data.data?.results?.products?.length) {
+            const mapped = data.data.results.products.map((wp, i) =>
+              mapWorkerProduct({ id: wp.id, data: typeof wp.data === "string" ? wp.data : JSON.stringify(wp) }, i)
+            );
+            setProducts(mapped);
+            setFrameSearching(false);
+            return;
+          }
+        }
+      } catch {
+        // D1 fetch failed — fall back to live vectorization
+      }
+      imageSearch.searchByUrl(middleFrame, runId);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId, keysParam]);
 
@@ -294,6 +319,7 @@ function ResultsPageContent() {
     [activeFrame, setProducts, setSelectedFrame, imageSearch],
   );
 
+  // Redirect to home if no valid entry point
   useEffect(() => {
     if (!searchId && !hasDirectResults && !queryId && !hasRunIdParam) {
       router.replace("/");
@@ -421,10 +447,12 @@ function ResultsPageContent() {
     return () => observer.disconnect();
   }, [fetchSuggestions]);
 
+  // --- All hooks are above this line. Conditional returns below. ---
+
   if (!searchId && !hasDirectResults && !queryId && !hasRunIdParam) return null;
 
-  // Show loading state when loading from ?id= param
-  if (hasRunIdParam && frameSearching && !hasDirectResults) {
+  // Show loading state when loading from ?id= param or ?q= param
+  if ((hasRunIdParam || queryId) && frameSearching && !hasDirectResults) {
     return (
       <PageTransition>
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-4">

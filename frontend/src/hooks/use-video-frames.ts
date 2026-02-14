@@ -6,6 +6,8 @@ const WORKER_URL = "https://instag-playwright.shadidhaque2014.workers.dev";
 
 interface UseVideoFramesReturn {
   frames: string[];
+  keys: string[];
+  runId: string | null;
   isLoading: boolean;
   error: string | null;
   fetchFrames: (videoUrl: string, count?: number) => Promise<void>;
@@ -14,6 +16,8 @@ interface UseVideoFramesReturn {
 
 export function useVideoFrames(): UseVideoFramesReturn {
   const [frames, setFrames] = useState<string[]>([]);
+  const [keys, setKeys] = useState<string[]>([]);
+  const [runId, setRunId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -21,6 +25,8 @@ export function useVideoFrames(): UseVideoFramesReturn {
   const reset = useCallback(() => {
     abortRef.current?.abort();
     setFrames([]);
+    setKeys([]);
+    setRunId(null);
     setIsLoading(false);
     setError(null);
   }, []);
@@ -33,6 +39,8 @@ export function useVideoFrames(): UseVideoFramesReturn {
     setIsLoading(true);
     setError(null);
     setFrames([]);
+    setKeys([]);
+    setRunId(null);
 
     try {
       const res = await fetch(WORKER_URL, {
@@ -44,10 +52,12 @@ export function useVideoFrames(): UseVideoFramesReturn {
 
       if (!res.ok) throw new Error("Failed to fetch video previews");
 
-      const data = (await res.json()) as { keys: string[] };
+      const data = (await res.json()) as { runId: string; keys: string[] };
       const imageUrls = data.keys.map(
         (key: string) => `${WORKER_URL}/?key=${encodeURIComponent(key)}`
       );
+      setRunId(data.runId);
+      setKeys(data.keys);
       setFrames(imageUrls);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -59,5 +69,5 @@ export function useVideoFrames(): UseVideoFramesReturn {
     }
   }, []);
 
-  return { frames, isLoading, error, fetchFrames, reset };
+  return { frames, keys, runId, isLoading, error, fetchFrames, reset };
 }

@@ -81,7 +81,7 @@ interface UseImageSearchReturn {
   stage: SearchStage;
   products: Product[];
   error: string | null;
-  searchByUrl: (imageUrl: string) => Promise<void>;
+  searchByUrl: (imageUrl: string, id?: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -96,7 +96,7 @@ export function useImageSearch(): UseImageSearchReturn {
     setError(null);
   }, []);
 
-  const searchByUrl = useCallback(async (imageUrl: string) => {
+  const searchByUrl = useCallback(async (imageUrl: string, id?: string) => {
     setStage("analyzing");
     setError(null);
     setProducts([]);
@@ -104,10 +104,12 @@ export function useImageSearch(): UseImageSearchReturn {
     const minDelay = new Promise((r) => setTimeout(r, 1000));
 
     try {
+      const payload: Record<string, unknown> = { img_url: imageUrl, top_k: 15 };
+      if (id) payload.id = id;
       const apiCall = fetch(VECTORIZE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ img_url: imageUrl, top_k: 15 }),
+        body: JSON.stringify(payload),
       });
 
       await minDelay;

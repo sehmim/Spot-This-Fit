@@ -142,7 +142,7 @@ export default function PreviewPage() {
     const middleFrame = videoFrames.frames[Math.floor(videoFrames.frames.length / 2)];
     setSelectedPreview(middleFrame);
     setVideoFrames(videoFrames.frames);
-    imageSearch.searchByUrl(middleFrame);
+    imageSearch.searchByUrl(middleFrame, videoFrames.runId ?? undefined);
 
     // Save frames to Firestore (fire-and-forget, non-blocking)
     if (videoPreviewUrl) {
@@ -161,7 +161,15 @@ export default function PreviewPage() {
     if (imageSearch.stage !== "done") return;
     if (selectedPreview) setSelectedFrame(selectedPreview);
     setProducts(imageSearch.products);
-    const url = docId ? `/results?q=${docId}` : "/results";
+
+    // Build URL: prefer runId+keys (D1-cached), fall back to Firestore docId
+    let url = "/results";
+    if (videoFrames.runId && videoFrames.keys.length > 0) {
+      const keysParam = videoFrames.keys.map((k) => encodeURIComponent(k)).join(",");
+      url = `/results?id=${videoFrames.runId}&keys=${keysParam}`;
+    } else if (docId) {
+      url = `/results?q=${docId}`;
+    }
     router.push(url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageSearch.stage]);

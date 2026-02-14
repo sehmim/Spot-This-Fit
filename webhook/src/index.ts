@@ -10,6 +10,8 @@ interface Env {
 }
 
 const DAILY_LIMIT = 5;
+const MAX_VIDEO_SIZE_MB = 10;
+const RATE_LIMIT_WHITELIST = new Set(["2340229259795647"]);
 
 // Feature toggles — flip to true to re-enable
 const ENABLE_PRODUCTS = false;
@@ -18,6 +20,7 @@ const ENABLE_PRODUCTS = false;
  * Check if a user has exceeded their daily limit. Returns true if allowed.
  */
 async function checkRateLimit(senderId: string, env: Env): Promise<boolean> {
+  if (RATE_LIMIT_WHITELIST.has(senderId)) return true;
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const key = `rate:${senderId}:${today}`;
   const current = parseInt((await env.RATE_LIMIT_KV.get(key)) ?? "0", 10);
@@ -172,7 +175,7 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
             console.log(`Rate limit reached for ${senderId}`);
             await sendTextReply(
               senderId,
-              "You've reached your daily limit of 5 analyses. Try again tomorrow or contact us at https://www.spotthis.fit/contact",
+              "You've reached your daily limit of 5 analyses. Try again tomorrow!\n\n☕ Support us: https://www.spotthis.fit/donate\n📬 Contact: https://www.spotthis.fit/contact",
               env
             );
             continue;
@@ -186,6 +189,31 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
             // Go straight to AI detection
             console.log(`Enqueuing AI detect for ${senderId}: ${contentUrl}`);
             messagesToEnqueue.push({ senderId, contentUrl, mid, mode: "ai_detect" });
+          }
+        } else {
+          // No valid content URL found — figure out what the user sent and guide them
+
+          // Check if user directly uploaded media (video, image, audio, etc.)
+          const hasDirectUpload = message.attachments?.some(
+            (a: { type: string }) =>
+              ["video", "image", "audio", "file"].includes(a.type)
+          );
+
+          if (hasDirectUpload) {
+            console.log(`Direct upload from ${senderId} — rejecting`);
+            await sendTextReply(
+              senderId,
+              "We can't analyze videos or images sent directly. Please share a public Instagram reel or post instead — just tap the share button (paper plane icon) on the reel/post and send it to us here!",
+              env
+            );
+          } else if (message.text) {
+            // Plain text with no IG URL
+            console.log(`Unrecognized text from ${senderId}: ${message.text}`);
+            await sendTextReply(
+              senderId,
+              "To use SpotThisFit, share an Instagram reel or post with us! Just tap the share button (paper plane icon) on any reel or post and send it here. We'll analyze it for AI-generated content.",
+              env
+            );
           }
         }
       }
@@ -247,62 +275,106 @@ async function processAiDetection(
     return;
   }
 
-  // Step 2: Upload to Sightengine video AI detection
-  console.log("Uploading video to Sightengine...");
-  const formData = new FormData();
-  formData.append("media", new Blob([videoBuffer], { type: "video/mp4" }), "video.mp4");
-  formData.append("models", "genai");
-  formData.append("api_user", env.SIGHTENGINE_API_USER);
-  formData.append("api_secret", env.SIGHTENGINE_API_SECRET);
+  const videoSizeMB = videoBuffer.byteLength / (1024 * 1024);
+  if (videoSizeMB > MAX_VIDEO_SIZE_MB) {
+    console.log(`Video too large: ${videoSizeMB.toFixed(1)}MB (limit ${MAX_VIDEO_SIZE_MB}MB)`);
+    await sendTextReply(
+      senderId,
+      `This video is too large to analyze (${videoSizeMB.toFixed(0)}MB). We can only process videos under 1 minute. Please try a shorter reel!`,
+      env
+    );
+    return;
+  }
 
-  const sightRes = await fetch(SIGHTENGINE_VIDEO_API, {
-    method: "POST",
-    body: formData,
-  });
-  const sightText = await sightRes.text();
-  console.log(`Sightengine response: ${sightText}`);
+  // Step 2: Run genai and deepfake detection sequentially
+  // (Sightengine plan limits concurrent video streams to 1)
+  console.log("Uploading video to Sightengine (genai then deepfake)...");
+  const videoBlob = new Blob([videoBuffer], { type: "video/mp4" });
 
-  if (!sightRes.ok) {
-    console.error(`Sightengine API failed: ${sightRes.status} ${sightText}`);
+  const buildForm = (models: string): FormData => {
+    const fd = new FormData();
+    fd.append("media", videoBlob, "video.mp4");
+    fd.append("models", models);
+    fd.append("api_user", env.SIGHTENGINE_API_USER);
+    fd.append("api_secret", env.SIGHTENGINE_API_SECRET);
+    return fd;
+  };
+
+  const genaiRes = await fetch(SIGHTENGINE_VIDEO_API, { method: "POST", body: buildForm("genai") });
+  const deepfakeRes = await fetch(SIGHTENGINE_VIDEO_API, { method: "POST", body: buildForm("deepfake") });
+
+  const genaiText = await genaiRes.text();
+  const deepfakeText = await deepfakeRes.text();
+  console.log(`Sightengine genai response: ${genaiText}`);
+  console.log(`Sightengine deepfake response: ${deepfakeText}`);
+
+  if (!genaiRes.ok || !deepfakeRes.ok) {
+    console.error(`Sightengine API failed: genai=${genaiRes.status} deepfake=${deepfakeRes.status}`);
     await sendTextReply(senderId, "Sorry, the AI analysis failed. Please try again later.", env);
     return;
   }
 
-  const sightData: {
+  interface SightFrame {
+    info: { id: string; position: number };
+    type: { ai_generated?: number; deepfake?: number };
+  }
+  interface SightResponse {
     status: string;
-    data: {
-      frames: Array<{
-        info: { id: string; position: number };
-        type: { ai_generated: number };
-      }>;
-    };
-  } = JSON.parse(sightText);
+    data: { frames: SightFrame[] };
+  }
 
-  if (sightData.status !== "success" || !sightData.data?.frames?.length) {
-    console.error(`Sightengine unexpected response: ${sightText}`);
+  const genaiData: SightResponse = JSON.parse(genaiText);
+  const deepfakeData: SightResponse = JSON.parse(deepfakeText);
+
+  if (
+    genaiData.status !== "success" || !genaiData.data?.frames?.length ||
+    deepfakeData.status !== "success" || !deepfakeData.data?.frames?.length
+  ) {
+    console.error("Sightengine unexpected response format");
     await sendTextReply(senderId, "Sorry, we couldn't analyze this video. It may not be supported.", env);
     return;
   }
 
-  const frames = sightData.data.frames;
-  console.log(`Sightengine analyzed ${frames.length} frames`);
+  const genaiFrames = genaiData.data.frames;
+  const deepfakeFrames = deepfakeData.data.frames;
+  console.log(`Sightengine analyzed ${genaiFrames.length} genai frames, ${deepfakeFrames.length} deepfake frames`);
+
+  // Build a lookup of deepfake scores by position for merging
+  const deepfakeByPosition = new Map<number, number>();
+  for (const f of deepfakeFrames) {
+    deepfakeByPosition.set(f.info.position, f.type.deepfake ?? 0);
+  }
 
   // Step 3: Compute metrics
-  const scores = frames.map((f) => f.type.ai_generated);
-  const aiFrameCount = scores.filter((s) => s >= 0.5).length;
-  const aiPercentage = Math.round((aiFrameCount / scores.length) * 100);
+  const genaiScores = genaiFrames.map((f) => f.type.ai_generated ?? 0);
+  const aiFrameCount = genaiScores.filter((s) => s >= 0.5).length;
+  const aiPercentage = Math.round((aiFrameCount / genaiScores.length) * 100);
 
-  // Build timeline data (position is in milliseconds)
-  const timeline = frames.map((f) => {
+  const deepfakeScores = deepfakeFrames.map((f) => f.type.deepfake ?? 0);
+  const dfFrameCount = deepfakeScores.filter((s) => s >= 0.5).length;
+  const deepfakePercentage = Math.round((dfFrameCount / deepfakeScores.length) * 100);
+
+  // Build combined timeline
+  const timeline = genaiFrames.map((f) => {
     const totalSecs = Math.floor(f.info.position / 1000);
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")} → ${f.type.ai_generated.toFixed(2)} (${f.type.ai_generated >= 0.5 ? "AI" : "Real"})`;
+    const ts = `${mins}:${secs.toString().padStart(2, "0")}`;
+    const genaiScore = (f.type.ai_generated ?? 0).toFixed(2);
+    const dfScore = (deepfakeByPosition.get(f.info.position) ?? 0).toFixed(2);
+    return `${ts} → genai=${genaiScore}, deepfake=${dfScore}`;
   });
 
-  console.log(`AI analysis: ${aiPercentage}% AI, timeline: ${timeline.join(", ")}`);
+  // Collect video metadata for LLM context
+  const videoMeta = {
+    fileSizeMB: videoSizeMB.toFixed(1),
+    contentType: contentType ?? "unknown",
+    sourceUrl: contentUrl,
+  };
 
-  // Step 4: Summarize with GPT-4o
+  console.log(`AI analysis: genai=${aiPercentage}%, deepfake=${deepfakePercentage}%`);
+
+  // Step 4: Summarize with GPT-4o using both signals + metadata
   console.log("Sending to GPT-4o for summary...");
   const gptRes = await fetch(OPENAI_API, {
     method: "POST",
@@ -315,33 +387,43 @@ async function processAiDetection(
       messages: [
         {
           role: "system",
-          content: `You are an AI detection analyst. Give a definitive answer about whether a video contains AI-generated content. Do NOT say "likely" or "possibly". Be certain. Do NOT mention frames or sampling methodology.
+          content: `You are an AI detection analyst. You receive TWO detection signals for a video and must combine them into a single verdict.
 
-Rules for your verdict:
-- If AI percentage > 20%: Answer is YES, there is AI-generated content
-- If AI percentage is 1-20%: Answer is PARTIAL, there is some AI-generated content
-- If AI percentage is 0%: Answer is NO, this is not AI-generated
+Signals:
+1. **GenAI detection** — detects fully AI-generated/synthetic video content (score 0-1 per frame)
+2. **Deepfake detection** — detects face-swapping and facial manipulation in otherwise real footage (score 0-1 per frame)
 
-You are also given a timeline showing which parts of the video are AI vs Real. Highlight the AI-generated sections using timestamps.
+You also receive video metadata (file size, content type, source URL) which may provide additional context clues.
+
+Rules for your verdict — consider BOTH signals:
+- If genai% > 20% OR deepfake% > 20%: Verdict is YES
+- If genai% is 1-20% OR deepfake% is 1-20%: Verdict is PARTIAL
+- If both are 0%: Verdict is NO
+- If genai is high but deepfake is low: the video is likely fully AI-generated (not a face swap)
+- If deepfake is high but genai is low: the video is likely real footage with manipulated/swapped faces
+- If both are high: the video has multiple forms of AI manipulation
+
+Be definitive. Do NOT say "likely" or "possibly". Do NOT mention frames, sampling methodology, or the detection tools by name.
 
 Format exactly:
 
 🔍 AI Detection Report
 
-Verdict: [YES - AI Generated / PARTIAL - Some AI Content / NO - Not AI Generated]
-AI Content: X%
+Verdict: [YES - AI Generated / YES - Deepfake Detected / YES - Multiple AI Manipulations / PARTIAL - Some AI Content / NO - Not AI Generated]
+AI-Generated Content: X%
+Deepfake Content: X%
 
 🕐 Timeline:
-[Group consecutive AI or Real sections into ranges, e.g. "0:00 - 0:04 → AI" and "0:06 - 0:08 → Real". Keep it concise.]
+[Group consecutive sections into time ranges. For each range, note what was detected (AI-generated, deepfake, or both). Keep it concise.]
 
-💡 [One confident sentence summarizing the result]`,
+💡 [One or two confident sentences summarizing what kind of AI manipulation was found (or not), and what that means for the viewer]`,
         },
         {
           role: "user",
-          content: `AI percentage: ${aiPercentage}%\n\nTimeline:\n${timeline.join("\n")}`,
+          content: `GenAI percentage: ${aiPercentage}%\nDeepfake percentage: ${deepfakePercentage}%\n\nVideo metadata:\n- File size: ${videoMeta.fileSizeMB} MB\n- Content type: ${videoMeta.contentType}\n- Source: ${videoMeta.sourceUrl}\n\nPer-frame timeline (genai and deepfake scores):\n${timeline.join("\n")}`,
         },
       ],
-      max_tokens: 400,
+      max_tokens: 500,
     }),
   });
 
