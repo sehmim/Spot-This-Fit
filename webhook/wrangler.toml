@@ -13,6 +13,12 @@ VERIFY_TOKEN = "SPOT_THIS_META_WEBHOOK_TOKEN_420_69"
 binding = "RATE_LIMIT_KV"
 id = "20327327b4844139a6b8cd4ad22a03d5"
 
+# Shared D1 database for conversation history and analysis jobs
+[[d1_databases]]
+binding = "CONVERSATIONS_DB"
+database_name = "vertorize-img-db"
+database_id = "5df0aff4-d62f-48de-a762-6320024fcc54"
+
 # Queue for async processing of reels (screenshot + vectorize)
 [[queues.producers]]
 queue = "spotthisfit-processing"
