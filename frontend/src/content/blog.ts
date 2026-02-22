@@ -37,7 +37,7 @@ const blogPosts: BlogPost[] = [
     date: "2026-02-02",
     content: {
       en: {
-        title: "Meet @mimthehuman and the Origin of Spot This Fit",
+        title: "Meet @mimthehuman and the Origin of Spot This",
         description:
           "How a musician's fit-check DMs inspired a tool that finds every item from short videos and photos.",
         excerpt:
@@ -76,8 +76,8 @@ const blogPosts: BlogPost[] = [
           {
             type: "p",
             text: {
-              en: "From there, the idea for Spot This Fit was born.",
-              fr: "C'est comme ca que l'idee de Spot This Fit est nee.",
+              en: "From there, the idea for Spot This was born.",
+              fr: "C'est comme ca que l'idee de Spot This est nee.",
             },
           },
           {
@@ -97,14 +97,14 @@ const blogPosts: BlogPost[] = [
           {
             type: "p",
             text: {
-              en: "Spot This Fit allows users to find the exact fit they're looking for while aggregating the same product from multiple sellers, helping them find the best possible deals. It's the ultimate tool for turning the fits you love into pieces in your closet.",
-              fr: "Spot This Fit permet de retrouver le look exact tout en regroupant le meme produit chez plusieurs vendeurs pour trouver le meilleur prix. C'est l'outil ultime pour transformer les looks que tu aimes en pieces dans ton dressing.",
+              en: "Spot This allows users to find the exact fit they're looking for while aggregating the same product from multiple sellers, helping them find the best possible deals. It's the ultimate tool for turning the fits you love into pieces in your closet.",
+              fr: "Spot This permet de retrouver le look exact tout en regroupant le meme produit chez plusieurs vendeurs pour trouver le meilleur prix. C'est l'outil ultime pour transformer les looks que tu aimes en pieces dans ton dressing.",
             },
           },
         ],
       },
       fr: {
-        title: "Rencontrez @mimthehuman et l'origine de Spot This Fit",
+        title: "Rencontrez @mimthehuman et l'origine de Spot This",
         description:
           "Comment les DM de fit-check d'un musicien ont inspire un outil qui retrouve chaque article depuis des videos courtes et des photos.",
         excerpt:
@@ -143,8 +143,8 @@ const blogPosts: BlogPost[] = [
           {
             type: "p",
             text: {
-              en: "From there, the idea for Spot This Fit was born.",
-              fr: "C'est comme ca que l'idee de Spot This Fit est nee.",
+              en: "From there, the idea for Spot This was born.",
+              fr: "C'est comme ca que l'idee de Spot This est nee.",
             },
           },
           {
@@ -164,8 +164,8 @@ const blogPosts: BlogPost[] = [
           {
             type: "p",
             text: {
-              en: "Spot This Fit allows users to find the exact fit they're looking for while aggregating the same product from multiple sellers, helping them find the best possible deals. It's the ultimate tool for turning the fits you love into pieces in your closet.",
-              fr: "Spot This Fit permet de retrouver le look exact tout en regroupant le meme produit chez plusieurs vendeurs pour trouver le meilleur prix. C'est l'outil ultime pour transformer les looks que tu aimes en pieces dans ton dressing.",
+              en: "Spot This allows users to find the exact fit they're looking for while aggregating the same product from multiple sellers, helping them find the best possible deals. It's the ultimate tool for turning the fits you love into pieces in your closet.",
+              fr: "Spot This permet de retrouver le look exact tout en regroupant le meme produit chez plusieurs vendeurs pour trouver le meilleur prix. C'est l'outil ultime pour transformer les looks que tu aimes en pieces dans ton dressing.",
             },
           },
         ],
