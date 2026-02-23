@@ -12,7 +12,7 @@ interface Env {
   CONVERSATIONS_DB: D1Database;
 }
 
-const DAILY_LIMIT = 5;
+const DAILY_LIMIT = 3;
 const RATE_LIMIT_WHITELIST = new Set(["2340229259795647"]);
 
 // Feature toggles — flip to true to re-enable
@@ -172,7 +172,7 @@ interface QueueMessage {
   senderId: string;
   contentUrl: string;
   mid: string;
-  mode: "ai_detect" | "products" | "deepfake_retry";
+  mode: "ai_detect" | "products" | "deepfake_retry" | "deepfake_only";
   jobId?: string;
 }
 
@@ -191,6 +191,7 @@ interface SightFrame {
 
 const PAYLOAD_PREFIX_AI = "SPOT_AI:";
 const PAYLOAD_PREFIX_PRODUCTS = "SPOT_PRODUCTS:";
+const PAYLOAD_PREFIX_DEEPFAKE = "SPOT_DEEPFAKE:";
 
 // ─── Worker entry points ─────────────────────────────────────────────────────
 
@@ -222,6 +223,8 @@ export default {
       try {
         if (mode === "ai_detect") {
           await processAiDetection(senderId, contentUrl, env);
+        } else if (mode === "deepfake_only") {
+          await processDeepfakeOnly(senderId, contentUrl, env);
         } else if (mode === "deepfake_retry" && jobId) {
           await submitDeepfakeJob(jobId, env);
         } else {
@@ -316,12 +319,15 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
         const mid = message.mid;
         console.log(`Message from ${senderId}: mid=${mid}, attachments=${JSON.stringify(message.attachments)}, text=${message.text}, quick_reply=${JSON.stringify(message.quick_reply)}`);
 
-        if (ENABLE_PRODUCTS && message.quick_reply?.payload) {
+        if (message.quick_reply?.payload) {
           const qrPayload = message.quick_reply.payload as string;
           if (qrPayload.startsWith(PAYLOAD_PREFIX_AI)) {
             const contentUrl = qrPayload.slice(PAYLOAD_PREFIX_AI.length);
             messagesToEnqueue.push({ senderId, contentUrl, mid, mode: "ai_detect" });
-          } else if (qrPayload.startsWith(PAYLOAD_PREFIX_PRODUCTS)) {
+          } else if (qrPayload.startsWith(PAYLOAD_PREFIX_DEEPFAKE)) {
+            const contentUrl = qrPayload.slice(PAYLOAD_PREFIX_DEEPFAKE.length);
+            messagesToEnqueue.push({ senderId, contentUrl, mid, mode: "deepfake_only" });
+          } else if (ENABLE_PRODUCTS && qrPayload.startsWith(PAYLOAD_PREFIX_PRODUCTS)) {
             const contentUrl = qrPayload.slice(PAYLOAD_PREFIX_PRODUCTS.length);
             messagesToEnqueue.push({ senderId, contentUrl, mid, mode: "products" });
           }
@@ -374,13 +380,8 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
             continue;
           }
 
-          if (ENABLE_PRODUCTS) {
-            console.log(`Sending choice buttons to ${senderId} for: ${contentUrl}`);
-            await sendChoiceButtons(senderId, contentUrl, env);
-          } else {
-            console.log(`Enqueuing AI detect for ${senderId}: ${contentUrl}`);
-            messagesToEnqueue.push({ senderId, contentUrl, mid, mode: "ai_detect" });
-          }
+          console.log(`Sending analysis choice buttons to ${senderId} for: ${contentUrl}`);
+          await sendAnalysisChoiceButtons(senderId, contentUrl, env);
         } else {
           const hasDirectUpload = message.attachments?.some(
             (a: { type: string }) => ["video", "image", "audio", "file"].includes(a.type)
@@ -421,8 +422,65 @@ const WORKER_BASE_URL = "https://spotthisfit-webhook.shadidhaque2014.workers.dev
 // ─── AI detection ────────────────────────────────────────────────────────────
 
 /**
- * Submit genai job to Sightengine async API. Deepfake job is submitted after
- * the genai callback arrives, via the queue with a delay.
+ * Submit a deepfake-only job to Sightengine async API.
+ * Does not chain to genai — the user explicitly chose this single check.
+ */
+async function processDeepfakeOnly(
+  senderId: string,
+  contentUrl: string,
+  env: Env
+): Promise<void> {
+  const ackMsg = "Analyzing your video for deepfakes. This can take 1–3 minutes for longer reels — we'll message you as soon as it's done!";
+  await sendTextReply(senderId, ackMsg, env);
+  await logMessage(env.CONVERSATIONS_DB, senderId, "bot", ackMsg);
+
+  const jobId = crypto.randomUUID();
+  const callbackUrl = `${WORKER_BASE_URL}/sightengine-callback?secret=${encodeURIComponent(env.SIGHTENGINE_CALLBACK_WINTER_SUMMER)}&jobId=${encodeURIComponent(jobId)}&model=deepfake`;
+
+  const fd = new FormData();
+  fd.append("stream_url", contentUrl);
+  fd.append("models", "deepfake");
+  fd.append("callback_url", callbackUrl);
+  fd.append("api_user", env.SIGHTENGINE_API_USER);
+  fd.append("api_secret", env.SIGHTENGINE_API_SECRET);
+
+  console.log(`Submitting deepfake-only job (jobId=${jobId}) for ${contentUrl}`);
+
+  interface AsyncSubmitResponse {
+    status: string;
+    media?: { id: string };
+    error?: { message: string };
+  }
+
+  const res = await fetch(SIGHTENGINE_VIDEO_ASYNC_API, { method: "POST", body: fd });
+  const text = await res.text();
+  console.log(`Sightengine async deepfake submit: ${text}`);
+
+  if (!res.ok) {
+    console.error(`Sightengine deepfake submit failed: ${res.status}`);
+    await sendTextReply(senderId, "Sorry, the deepfake analysis failed to start. Please try again later.", env);
+    return;
+  }
+
+  const data: AsyncSubmitResponse = JSON.parse(text);
+  if (data.status !== "success") {
+    console.error(`Sightengine deepfake submit error: ${data.error?.message}`);
+    await sendTextReply(senderId, "Sorry, we couldn't analyze this video. It may not be supported.", env);
+    return;
+  }
+
+  await saveJob(env.CONVERSATIONS_DB, {
+    jobId,
+    senderId,
+    contentUrl,
+    phase: "deepfake",
+    genaiFrames: null,
+  });
+  console.log(`Deepfake-only job ${jobId} stored in D1, waiting for callback`);
+}
+
+/**
+ * Submit genai job to Sightengine async API.
  */
 async function processAiDetection(
   senderId: string,
@@ -559,44 +617,21 @@ async function handleSightengineCallback(
   }
 
   if (job.phase === "genai" && modelParam === "genai") {
-    // Send genai mini-report immediately
     const genaiFrames = data.data.frames;
-    const genaiReport = buildGenaiMiniReport(genaiFrames);
-    await sendTextReply(job.senderId, genaiReport, env);
-    await logMessage(env.CONVERSATIONS_DB, job.senderId, "bot", genaiReport);
-
-    // Update job in D1: store genai frames, advance phase to deepfake
-    job.genaiFrames = genaiFrames;
-    job.phase = "deepfake";
-    await saveJob(env.CONVERSATIONS_DB, job);
-
-    // Enqueue deepfake submission with 20s delay so stream slot is free
-    console.log(`Genai done for job ${jobId}, enqueuing deepfake with 20s delay`);
-    await env.PROCESSING_QUEUE.send(
-      { senderId: job.senderId, contentUrl: job.contentUrl, mid: "", mode: "deepfake_retry", jobId },
-      { delaySeconds: 20 }
-    );
+    const miniReport = buildGenaiMiniReport(genaiFrames);
+    const summary = await buildGenaiSummary(genaiFrames, env);
+    const fullMessage = `${miniReport}\n\n${summary}`;
+    await sendTextReply(job.senderId, fullMessage, env);
+    await logMessage(env.CONVERSATIONS_DB, job.senderId, "bot", fullMessage);
+    await deleteJob(env.CONVERSATIONS_DB, jobId);
 
   } else if (job.phase === "deepfake" && modelParam === "deepfake") {
     const deepfakeFrames = data.data.frames;
-
-    // Reconstruct genai report from stored frames so we can cache it
-    const genaiReport = buildGenaiMiniReport(job.genaiFrames!);
-
-    // Send deepfake mini-report
-    const deepfakeReport = buildDeepfakeMiniReport(deepfakeFrames);
-    await sendTextReply(job.senderId, deepfakeReport, env);
-    await logMessage(env.CONVERSATIONS_DB, job.senderId, "bot", deepfakeReport);
-
-    // Send GPT-4o combined summary and get the text back for caching
-    const summary = await sendCombinedSummary(job.senderId, job.contentUrl, job.genaiFrames!, deepfakeFrames, env);
-
-    // Persist results so the same URL is never re-analyzed
-    if (summary) {
-      await saveAnalysisResult(env.CONVERSATIONS_DB, job.contentUrl, genaiReport, deepfakeReport, summary);
-      console.log(`Cached analysis results for ${job.contentUrl}`);
-    }
-
+    const miniReport = buildDeepfakeMiniReport(deepfakeFrames);
+    const summary = await buildDeepfakeSummary(deepfakeFrames, env);
+    const fullMessage = `${miniReport}\n\n${summary}`;
+    await sendTextReply(job.senderId, fullMessage, env);
+    await logMessage(env.CONVERSATIONS_DB, job.senderId, "bot", fullMessage);
     await deleteJob(env.CONVERSATIONS_DB, jobId);
 
   } else {
@@ -646,9 +681,7 @@ Verdict: ${verdict}
 AI-Generated Frames: ${pct}%
 
 🕐 Timeline:
-${buildTimeline(frames, "ai_generated")}
-
-⏳ Running deepfake analysis next...`;
+${buildTimeline(frames, "ai_generated")}`;
 }
 
 /**
@@ -668,9 +701,127 @@ Verdict: ${verdict}
 Deepfake Frames: ${pct}%
 
 🕐 Timeline:
-${buildTimeline(frames, "deepfake")}
+${buildTimeline(frames, "deepfake")}`;
+}
 
-⏳ Generating combined summary...`;
+/**
+ * GPT-4o summary for a genai-only check. Returns the summary string.
+ */
+async function buildGenaiSummary(frames: SightFrame[], env: Env): Promise<string> {
+  const pct = computePercentage(frames, "ai_generated");
+  console.log(`Building genai GPT-4o summary: genai=${pct}%`);
+
+  const gptRes = await fetch(OPENAI_API, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an AI detection analyst. The user chose to check for AI-generated content only. Write a concise summary based solely on the AI-generated content percentage provided.
+
+The ONLY input you must use is the percentage value. Do NOT infer from raw frame scores.
+
+Verdict rules (apply exactly):
+- 0% → Verdict: NO — Not AI Generated
+- 1–13% → Verdict: PARTIAL — Minor AI Editing
+- 14–20% → Verdict: PARTIAL — Significant AI Editing
+- >20% → Verdict: YES — AI Generated
+
+Additional rules:
+- Be definitive. Do NOT use words like "likely", "possibly", or "may".
+- Do NOT mention raw frame scores, the timeline, sampling, or tool names.
+
+Format exactly:
+
+🔍 AI-Generated Content Summary
+
+Overall Verdict: [verdict from rules above]
+
+💡 [Two to three confident sentences. If verdict is NO, confirm the video shows no signs of AI generation.]`,
+        },
+        {
+          role: "user",
+          content: `AI-Generated Content: ${pct}%`,
+        },
+      ],
+      max_tokens: 200,
+    }),
+  });
+
+  if (!gptRes.ok) {
+    console.error(`OpenAI genai summary failed: ${gptRes.status} ${await gptRes.text()}`);
+    return "";
+  }
+
+  const gptData: { choices: Array<{ message: { content: string } }> } = await gptRes.json();
+  const summary = gptData.choices?.[0]?.message?.content ?? "";
+  console.log(`GPT-4o genai summary: ${summary}`);
+  return summary;
+}
+
+/**
+ * GPT-4o summary for a deepfake-only check. Returns the summary string.
+ */
+async function buildDeepfakeSummary(frames: SightFrame[], env: Env): Promise<string> {
+  const pct = computePercentage(frames, "deepfake");
+  console.log(`Building deepfake GPT-4o summary: deepfake=${pct}%`);
+
+  const gptRes = await fetch(OPENAI_API, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an AI detection analyst. The user chose to check for deepfake manipulation only. Write a concise summary based solely on the deepfake percentage provided.
+
+The ONLY input you must use is the percentage value. Do NOT infer from raw frame scores.
+
+Verdict rules (apply exactly):
+- 0% → Verdict: NO — No Deepfake Detected
+- 1–13% → Verdict: PARTIAL — Minor Manipulation
+- 14–20% → Verdict: PARTIAL — Significant Manipulation
+- >20% → Verdict: YES — Deepfake Detected
+
+Additional rules:
+- Be definitive. Do NOT use words like "likely", "possibly", or "may".
+- Do NOT mention raw frame scores, the timeline, sampling, or tool names.
+
+Format exactly:
+
+🔍 Deepfake Analysis Summary
+
+Overall Verdict: [verdict from rules above]
+
+💡 [Two to three confident sentences. If verdict is NO, confirm no face or body manipulation was detected.]`,
+        },
+        {
+          role: "user",
+          content: `Deepfake: ${pct}%`,
+        },
+      ],
+      max_tokens: 200,
+    }),
+  });
+
+  if (!gptRes.ok) {
+    console.error(`OpenAI deepfake summary failed: ${gptRes.status} ${await gptRes.text()}`);
+    return "";
+  }
+
+  const gptData: { choices: Array<{ message: { content: string } }> } = await gptRes.json();
+  const summary = gptData.choices?.[0]?.message?.content ?? "";
+  console.log(`GPT-4o deepfake summary: ${summary}`);
+  return summary;
 }
 
 /**
@@ -796,8 +947,9 @@ STRICT RULES — follow every rule without exception:
 
 Context on how the bot works (use this to answer clarification questions accurately):
 - Users share a public Instagram reel or post by tapping the paper-plane share icon and sending it here.
-- The bot analyzes the video for AI-generated content (AI generation %) and deepfake manipulation (deepfake %).
-- Results are delivered in three messages: AI-generated mini-report, deepfake mini-report, then a combined GPT-4o summary.
+- After sharing, the bot presents two options: "🤖 Check for Gen AI" or "👤 Check for Deepfake". The user picks one.
+- "Check for Gen AI" detects AI-generated imagery (AI generation %) and replies with a single report.
+- "Check for Deepfake" detects face/body manipulation (deepfake %) and replies with a single report.
 - Analysis takes 1–3 minutes for longer reels.
 - Users are limited to 5 analyses per day.
 - The bot cannot analyze videos or images sent directly — only shared Instagram links.`;
@@ -863,6 +1015,28 @@ async function generateConversationalReply(
 }
 
 // ─── Instagram messaging helpers ─────────────────────────────────────────────
+
+async function sendAnalysisChoiceButtons(recipientId: string, contentUrl: string, env: Env): Promise<void> {
+  const response = await fetch("https://graph.instagram.com/v22.0/me/messages", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.PAGE_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      recipient: { id: recipientId },
+      message: {
+        text: "What would you like to check?",
+        quick_replies: [
+          { content_type: "text", title: "🤖 Check for Gen AI", payload: `${PAYLOAD_PREFIX_AI}${contentUrl}` },
+          { content_type: "text", title: "👤 Check for Deepfake", payload: `${PAYLOAD_PREFIX_DEEPFAKE}${contentUrl}` },
+        ],
+      },
+    }),
+  });
+  if (!response.ok) console.error(`Failed to send analysis choice buttons: ${response.status} ${await response.text()}`);
+  else console.log(`Analysis choice buttons sent to ${recipientId}`);
+}
 
 async function sendChoiceButtons(recipientId: string, contentUrl: string, env: Env): Promise<void> {
   const response = await fetch("https://graph.instagram.com/v22.0/me/messages", {

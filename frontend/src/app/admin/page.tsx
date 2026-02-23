@@ -19,7 +19,18 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Lock, ExternalLink, Search, RefreshCw, Eye, MessageSquare, Bot, User } from "lucide-react";
+import { Lock, ExternalLink, Search, RefreshCw, Eye, MessageSquare, Bot, User, BarChart2 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} from "recharts";
 import { cn } from "@/lib/utils";
 
 const ADMIN_PASSWORD = "Bali123123!";
@@ -285,7 +296,7 @@ function ConversationModal({
 
 // ── Search Records Tab ────────────────────────────────────────────────────────
 
-function SearchRecordsTab() {
+function SearchRecordsTab({ onDataLoaded }: { onDataLoaded?: (r: SearchRecord[]) => void }) {
   const [records, setRecords] = useState<SearchRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -296,23 +307,23 @@ function SearchRecordsTab() {
     try {
       const q = query(collection(db, "videoSearches"), orderBy("createdAt", "desc"));
       const snap = await getDocs(q);
-      setRecords(
-        snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            videoUrl: data.videoUrl ?? "",
-            frames: Array.isArray(data.frames) ? data.frames : [],
-            createdAt: data.createdAt ?? null,
-          };
-        })
-      );
+      const loaded = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          videoUrl: data.videoUrl ?? "",
+          frames: Array.isArray(data.frames) ? data.frames : [],
+          createdAt: data.createdAt ?? null,
+        };
+      });
+      setRecords(loaded);
+      onDataLoaded?.(loaded);
     } catch {
       setRecords([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onDataLoaded]);
 
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
 
@@ -432,7 +443,7 @@ function SearchRecordsTab() {
 
 // ── Conversations Tab ─────────────────────────────────────────────────────────
 
-function ConversationsTab() {
+function ConversationsTab({ onDataLoaded }: { onDataLoaded?: (c: Conversation[]) => void }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -447,7 +458,6 @@ function ConversationsTab() {
       if (!res.ok) throw new Error("Unauthorized");
       const data: { messages: Message[] } = await res.json();
 
-      // Group messages by sender_id, newest conversation first
       const map = new Map<string, Message[]>();
       for (const msg of data.messages) {
         if (!map.has(msg.sender_id)) map.set(msg.sender_id, []);
@@ -456,18 +466,19 @@ function ConversationsTab() {
 
       const convos: Conversation[] = Array.from(map.entries()).map(([senderId, msgs]) => ({
         senderId,
-        messages: msgs, // already DESC from API
+        messages: msgs,
         lastMessageAt: msgs[0].created_at,
       }));
 
       convos.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
       setConversations(convos);
+      onDataLoaded?.(convos);
     } catch {
       setConversations([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onDataLoaded]);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("stf_admin_secret");
@@ -635,38 +646,350 @@ function SecretPrompt({ onSet }: { onSet: () => void }) {
   );
 }
 
+// ── Analytics Tab ─────────────────────────────────────────────────────────────
+
+interface DailyPoint {
+  date: string;        // "Feb 14"
+  messages: number;
+  searches: number;
+  users: number;
+  cumMessages: number;
+  cumUsers: number;
+}
+
+function buildDailyTimeline(
+  conversations: Conversation[],
+  searchRecords: SearchRecord[],
+): DailyPoint[] {
+  // Collect all dates that appear in either dataset
+  const dayMap = new Map<string, { messages: number; userSet: Set<string>; searches: number }>();
+
+  const getKey = (d: Date) =>
+    d.toLocaleDateString("en-CA"); // YYYY-MM-DD for stable sort
+
+  const ensureDay = (key: string) => {
+    if (!dayMap.has(key)) dayMap.set(key, { messages: 0, userSet: new Set(), searches: 0 });
+    return dayMap.get(key)!;
+  };
+
+  for (const convo of conversations) {
+    for (const msg of convo.messages) {
+      const key = getKey(new Date(msg.created_at * 1000));
+      const day = ensureDay(key);
+      day.messages++;
+      day.userSet.add(convo.senderId);
+    }
+  }
+
+  for (const rec of searchRecords) {
+    if (!rec.createdAt) continue;
+    const key = getKey(rec.createdAt.toDate());
+    ensureDay(key).searches++;
+  }
+
+  const sorted = Array.from(dayMap.entries()).sort(([a], [b]) => a.localeCompare(b));
+
+  let cumMessages = 0;
+  let cumUsers = 0;
+  const seenUsers = new Set<string>();
+
+  return sorted.map(([isoDate, v]) => {
+    cumMessages += v.messages;
+    for (const u of v.userSet) {
+      if (!seenUsers.has(u)) { seenUsers.add(u); cumUsers++; }
+    }
+    const label = new Date(isoDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return {
+      date: label,
+      messages: v.messages,
+      searches: v.searches,
+      users: v.userSet.size,
+      cumMessages,
+      cumUsers,
+    };
+  });
+}
+
+const CHART_COLORS = {
+  messages: "#7c3aed",
+  users: "#a78bfa",
+  searches: "#c4b5fd",
+  cumMessages: "#7c3aed",
+  cumUsers: "#a78bfa",
+};
+
+function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-bold">{value}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function AnalyticsTab({
+  conversations: propConversations,
+  searchRecords: propSearchRecords,
+}: {
+  conversations: Conversation[];
+  searchRecords: SearchRecord[];
+}) {
+  const [conversations, setConversations] = useState<Conversation[]>(propConversations);
+  const [searchRecords, setSearchRecords] = useState<SearchRecord[]>(propSearchRecords);
+  const [loading, setLoading] = useState(false);
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [convRes, recSnap] = await Promise.all([
+        fetch(`${WEBHOOK_BASE}/admin/conversations?secret=${encodeURIComponent(ADMIN_SECRET)}&limit=500`),
+        getDocs(query(collection(db, "videoSearches"), orderBy("createdAt", "desc"))),
+      ]);
+
+      if (convRes.ok) {
+        const data: { messages: Message[] } = await convRes.json();
+        const map = new Map<string, Message[]>();
+        for (const msg of data.messages) {
+          if (!map.has(msg.sender_id)) map.set(msg.sender_id, []);
+          map.get(msg.sender_id)!.push(msg);
+        }
+        const convos: Conversation[] = Array.from(map.entries()).map(([senderId, msgs]) => ({
+          senderId, messages: msgs, lastMessageAt: msgs[0].created_at,
+        }));
+        convos.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+        setConversations(convos);
+      }
+
+      setSearchRecords(recSnap.docs.map((d) => {
+        const data = d.data();
+        return { id: d.id, videoUrl: data.videoUrl ?? "", frames: Array.isArray(data.frames) ? data.frames : [], createdAt: data.createdAt ?? null };
+      }));
+    } catch { /* keep existing */ } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Auto-fetch on mount if data not already populated
+  useEffect(() => {
+    if (propConversations.length === 0 && propSearchRecords.length === 0) {
+      fetchAll();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const timeline = buildDailyTimeline(conversations, searchRecords);
+
+  const totalMessages = conversations.reduce((s, c) => s + c.messages.length, 0);
+  const totalUsers = conversations.length;
+  const totalSearches = searchRecords.length;
+
+  // 7-day window
+  const last7 = timeline.slice(-7);
+  const prev7 = timeline.slice(-14, -7);
+  const msgLast7 = last7.reduce((s, d) => s + d.messages, 0);
+  const msgPrev7 = prev7.reduce((s, d) => s + d.messages, 0);
+  const msgTrend = msgPrev7 === 0 ? null : Math.round(((msgLast7 - msgPrev7) / msgPrev7) * 100);
+
+  const noData = timeline.length === 0;
+
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold">Usage & Growth</h2>
+          <p className="text-xs text-muted-foreground">Across conversations and searches</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading} className="gap-2">
+          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          Refresh
+        </Button>
+      </div>
+
+      {/* KPI row */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <StatCard label="Total Users" value={totalUsers} />
+        <StatCard label="Total Messages" value={totalMessages} />
+        <StatCard
+          label="Messages (last 7d)"
+          value={msgLast7}
+          sub={
+            msgTrend === null
+              ? undefined
+              : msgTrend >= 0
+              ? `↑ ${msgTrend}% vs prev 7d`
+              : `↓ ${Math.abs(msgTrend)}% vs prev 7d`
+          }
+        />
+      </div>
+
+      {noData ? (
+        <div className="flex flex-col items-center justify-center gap-2 rounded-xl border bg-card py-20 text-sm text-muted-foreground">
+          <BarChart2 className="size-8 opacity-30" />
+          <p>No data yet. Charts will appear once there is activity.</p>
+        </div>
+      ) : (
+        <>
+          {/* Daily activity bar chart */}
+          <div className="rounded-xl border bg-card p-5">
+            <p className="mb-1 text-sm font-semibold">Daily Activity</p>
+            <p className="mb-5 text-xs text-muted-foreground">Messages and unique users per day</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={timeline} barGap={2} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={28}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                />
+                <Bar dataKey="messages" name="Messages" fill={CHART_COLORS.messages} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="users" name="Users" fill={CHART_COLORS.users} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Cumulative growth area chart */}
+          <div className="rounded-xl border bg-card p-5">
+            <p className="mb-1 text-sm font-semibold">Cumulative Growth</p>
+            <p className="mb-5 text-xs text-muted-foreground">Total messages and unique users over time</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={timeline}>
+                <defs>
+                  <linearGradient id="gradMsg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={CHART_COLORS.cumMessages} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={CHART_COLORS.cumMessages} stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradUsers" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={CHART_COLORS.cumUsers} stopOpacity={0.15} />
+                    <stop offset="95%" stopColor={CHART_COLORS.cumUsers} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={36}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="cumMessages"
+                  name="Total messages"
+                  stroke={CHART_COLORS.cumMessages}
+                  strokeWidth={2}
+                  fill="url(#gradMsg)"
+                  dot={false}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="cumUsers"
+                  name="Total users"
+                  stroke={CHART_COLORS.cumUsers}
+                  strokeWidth={2}
+                  fill="url(#gradUsers)"
+                  dot={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Daily searches bar chart — only if there are any */}
+          {totalSearches > 0 && (
+            <div className="rounded-xl border bg-card p-5">
+              <p className="mb-1 text-sm font-semibold">Daily Searches</p>
+              <p className="mb-5 text-xs text-muted-foreground">Video search records created per day</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={timeline} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={28}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Bar dataKey="searches" name="Searches" fill={CHART_COLORS.searches} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Dashboard Shell ───────────────────────────────────────────────────────────
 
-type Tab = "searches" | "conversations";
+type Tab = "analytics" | "conversations" | "searches";
 
 function Dashboard() {
-  const [tab, setTab] = useState<Tab>("conversations");
-  const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<Tab>("analytics");
+  // Shared data lifted here so Analytics can read both datasets without refetching
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [searchRecords, setSearchRecords] = useState<SearchRecord[]>([]);
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card px-6 py-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold">SpotThisFit Admin</h1>
+            <h1 className="text-lg font-bold">Spot This — Admin</h1>
             <p className="text-xs text-muted-foreground">Dashboard</p>
           </div>
-          {tab === "searches" && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLoading((l) => !l)}
-              className="gap-2"
-            >
-              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-              Refresh
-            </Button>
-          )}
         </div>
 
         {/* Tab bar */}
         <div className="mx-auto mt-4 flex max-w-6xl gap-1 border-b -mb-4">
-          {(["conversations", "searches"] as Tab[]).map((t) => (
+          {(["analytics", "conversations", "searches"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -677,7 +1000,11 @@ function Dashboard() {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {t === "conversations" ? (
+              {t === "analytics" ? (
+                <span className="flex items-center gap-1.5">
+                  <BarChart2 className="size-3.5" /> Analytics
+                </span>
+              ) : t === "conversations" ? (
                 <span className="flex items-center gap-1.5">
                   <MessageSquare className="size-3.5" /> Conversations
                 </span>
@@ -692,7 +1019,13 @@ function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-8">
-        {tab === "conversations" ? <ConversationsTab /> : <SearchRecordsTab />}
+        {tab === "analytics" ? (
+          <AnalyticsTab conversations={conversations} searchRecords={searchRecords} />
+        ) : tab === "conversations" ? (
+          <ConversationsTab onDataLoaded={setConversations} />
+        ) : (
+          <SearchRecordsTab onDataLoaded={setSearchRecords} />
+        )}
       </main>
     </div>
   );
