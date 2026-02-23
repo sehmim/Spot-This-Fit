@@ -296,40 +296,9 @@ function ConversationModal({
 
 // ── Search Records Tab ────────────────────────────────────────────────────────
 
-function SearchRecordsTab({ onDataLoaded }: { onDataLoaded?: (r: SearchRecord[]) => void }) {
-  const [records, setRecords] = useState<SearchRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+function SearchRecordsTab({ records, loading }: { records: SearchRecord[]; loading: boolean }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<SearchRecord | null>(null);
-
-  const fetchRecords = useCallback(async () => {
-    setLoading(true);
-    try {
-      const q = query(collection(db, "videoSearches"), orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
-      const loaded = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          videoUrl: data.videoUrl ?? "",
-          frames: Array.isArray(data.frames) ? data.frames : [],
-          createdAt: data.createdAt ?? null,
-        };
-      });
-      setRecords(loaded);
-      onDataLoaded?.(loaded);
-    } catch {
-      setRecords([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [onDataLoaded]);
-
-  useEffect(() => {
-    fetchRecords();
-    const interval = setInterval(fetchRecords, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchRecords]);
 
   const filtered = records.filter(
     (r) =>
@@ -447,48 +416,9 @@ function SearchRecordsTab({ onDataLoaded }: { onDataLoaded?: (r: SearchRecord[])
 
 // ── Conversations Tab ─────────────────────────────────────────────────────────
 
-function ConversationsTab({ onDataLoaded }: { onDataLoaded?: (c: Conversation[]) => void }) {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loading, setLoading] = useState(true);
+function ConversationsTab({ conversations, loading }: { conversations: Conversation[]; loading: boolean }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Conversation | null>(null);
-
-  const fetchConversations = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `${WEBHOOK_BASE}/admin/conversations?secret=${encodeURIComponent(ADMIN_SECRET)}&limit=500`
-      );
-      if (!res.ok) throw new Error("Unauthorized");
-      const data: { messages: Message[] } = await res.json();
-
-      const map = new Map<string, Message[]>();
-      for (const msg of data.messages) {
-        if (!map.has(msg.sender_id)) map.set(msg.sender_id, []);
-        map.get(msg.sender_id)!.push(msg);
-      }
-
-      const convos: Conversation[] = Array.from(map.entries()).map(([senderId, msgs]) => ({
-        senderId,
-        messages: msgs,
-        lastMessageAt: msgs[0].created_at,
-      }));
-
-      convos.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-      setConversations(convos);
-      onDataLoaded?.(convos);
-    } catch {
-      setConversations([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [onDataLoaded]);
-
-  useEffect(() => {
-    fetchConversations();
-    const interval = setInterval(fetchConversations, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchConversations]);
 
   const filtered = conversations.filter((c) =>
     c.senderId.toLowerCase().includes(search.toLowerCase())
@@ -530,10 +460,6 @@ function ConversationsTab({ onDataLoaded }: { onDataLoaded?: (c: Conversation[])
             className="pl-9"
           />
         </div>
-        <Button variant="outline" size="sm" onClick={fetchConversations} disabled={loading} className="gap-2 shrink-0">
-          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-          Refresh
-        </Button>
       </div>
 
       <div className="overflow-hidden rounded-xl border bg-card">
@@ -730,53 +656,14 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 }
 
 function AnalyticsTab({
-  conversations: propConversations,
-  searchRecords: propSearchRecords,
+  conversations,
+  searchRecords,
+  loading,
 }: {
   conversations: Conversation[];
   searchRecords: SearchRecord[];
+  loading: boolean;
 }) {
-  const [conversations, setConversations] = useState<Conversation[]>(propConversations);
-  const [searchRecords, setSearchRecords] = useState<SearchRecord[]>(propSearchRecords);
-  const [loading, setLoading] = useState(false);
-
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [convRes, recSnap] = await Promise.all([
-        fetch(`${WEBHOOK_BASE}/admin/conversations?secret=${encodeURIComponent(ADMIN_SECRET)}&limit=500`),
-        getDocs(query(collection(db, "videoSearches"), orderBy("createdAt", "desc"))),
-      ]);
-
-      if (convRes.ok) {
-        const data: { messages: Message[] } = await convRes.json();
-        const map = new Map<string, Message[]>();
-        for (const msg of data.messages) {
-          if (!map.has(msg.sender_id)) map.set(msg.sender_id, []);
-          map.get(msg.sender_id)!.push(msg);
-        }
-        const convos: Conversation[] = Array.from(map.entries()).map(([senderId, msgs]) => ({
-          senderId, messages: msgs, lastMessageAt: msgs[0].created_at,
-        }));
-        convos.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-        setConversations(convos);
-      }
-
-      setSearchRecords(recSnap.docs.map((d) => {
-        const data = d.data();
-        return { id: d.id, videoUrl: data.videoUrl ?? "", frames: Array.isArray(data.frames) ? data.frames : [], createdAt: data.createdAt ?? null };
-      }));
-    } catch { /* keep existing */ } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAll();
-    const interval = setInterval(fetchAll, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchAll]);
-
   const timeline = buildDailyTimeline(conversations, searchRecords);
 
   const totalMessages = conversations.reduce((s, c) => s + c.messages.length, 0);
@@ -799,10 +686,7 @@ function AnalyticsTab({
           <h2 className="text-base font-semibold">Usage & Growth</h2>
           <p className="text-xs text-muted-foreground">Across conversations and searches</p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading} className="gap-2 shrink-0">
-          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-          Refresh
-        </Button>
+        {loading && <RefreshCw className="size-4 animate-spin text-muted-foreground" />}
       </div>
 
       {/* KPI row */}
@@ -972,9 +856,46 @@ type Tab = "analytics" | "conversations" | "searches";
 
 function Dashboard() {
   const [tab, setTab] = useState<Tab>("analytics");
-  // Shared data lifted here so Analytics can read both datasets without refetching
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [searchRecords, setSearchRecords] = useState<SearchRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [convRes, recSnap] = await Promise.all([
+        fetch(`${WEBHOOK_BASE}/admin/conversations?secret=${encodeURIComponent(ADMIN_SECRET)}&limit=500`),
+        getDocs(query(collection(db, "videoSearches"), orderBy("createdAt", "desc"))),
+      ]);
+
+      if (convRes.ok) {
+        const data: { messages: Message[] } = await convRes.json();
+        const map = new Map<string, Message[]>();
+        for (const msg of data.messages) {
+          if (!map.has(msg.sender_id)) map.set(msg.sender_id, []);
+          map.get(msg.sender_id)!.push(msg);
+        }
+        const convos: Conversation[] = Array.from(map.entries()).map(([senderId, msgs]) => ({
+          senderId, messages: msgs, lastMessageAt: msgs[0].created_at,
+        }));
+        convos.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+        setConversations(convos);
+      }
+
+      setSearchRecords(recSnap.docs.map((d) => {
+        const data = d.data();
+        return { id: d.id, videoUrl: data.videoUrl ?? "", frames: Array.isArray(data.frames) ? data.frames : [], createdAt: data.createdAt ?? null };
+      }));
+    } catch { /* keep existing data on error */ } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAll();
+    const interval = setInterval(fetchAll, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchAll]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -1025,11 +946,11 @@ function Dashboard() {
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         {tab === "analytics" ? (
-          <AnalyticsTab conversations={conversations} searchRecords={searchRecords} />
+          <AnalyticsTab conversations={conversations} searchRecords={searchRecords} loading={loading} />
         ) : tab === "conversations" ? (
-          <ConversationsTab onDataLoaded={setConversations} />
+          <ConversationsTab conversations={conversations} loading={loading} />
         ) : (
-          <SearchRecordsTab onDataLoaded={setSearchRecords} />
+          <SearchRecordsTab records={searchRecords} loading={loading} />
         )}
       </main>
     </div>
