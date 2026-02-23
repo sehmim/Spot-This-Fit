@@ -325,7 +325,11 @@ function SearchRecordsTab({ onDataLoaded }: { onDataLoaded?: (r: SearchRecord[])
     }
   }, [onDataLoaded]);
 
-  useEffect(() => { fetchRecords(); }, [fetchRecords]);
+  useEffect(() => {
+    fetchRecords();
+    const interval = setInterval(fetchRecords, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchRecords]);
 
   const filtered = records.filter(
     (r) =>
@@ -481,12 +485,9 @@ function ConversationsTab({ onDataLoaded }: { onDataLoaded?: (c: Conversation[])
   }, [onDataLoaded]);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("stf_admin_secret");
-    if (stored) {
-      fetchConversations();
-    } else {
-      setLoading(false);
-    }
+    fetchConversations();
+    const interval = setInterval(fetchConversations, 30_000);
+    return () => clearInterval(interval);
   }, [fetchConversations]);
 
   const filtered = conversations.filter((c) =>
@@ -770,13 +771,11 @@ function AnalyticsTab({
     }
   }, []);
 
-  // Auto-fetch on mount if data not already populated
   useEffect(() => {
-    if (propConversations.length === 0 && propSearchRecords.length === 0) {
-      fetchAll();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    fetchAll();
+    const interval = setInterval(fetchAll, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchAll]);
 
   const timeline = buildDailyTimeline(conversations, searchRecords);
 
