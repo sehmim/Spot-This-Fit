@@ -220,7 +220,7 @@ function ConversationModal({
 
   return (
     <Dialog open={!!conversation} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[80vh] max-w-2xl flex flex-col">
+      <DialogContent className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-2xl flex flex-col">
         <DialogHeader>
           <DialogTitle>Conversation</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
@@ -795,12 +795,12 @@ function AnalyticsTab({
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">Usage & Growth</h2>
           <p className="text-xs text-muted-foreground">Across conversations and searches</p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading} className="gap-2">
+        <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading} className="gap-2 shrink-0">
           <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
           Refresh
         </Button>
@@ -831,24 +831,24 @@ function AnalyticsTab({
       ) : (
         <>
           {/* Daily activity bar chart */}
-          <div className="rounded-xl border bg-card p-5">
+          <div className="rounded-xl border bg-card p-3 sm:p-5">
             <p className="mb-1 text-sm font-semibold">Daily Activity</p>
-            <p className="mb-5 text-xs text-muted-foreground">Messages and unique users per day</p>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={timeline} barGap={2} barCategoryGap="30%">
+            <p className="mb-4 text-xs text-muted-foreground">Messages and unique users per day</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={timeline} barGap={2} barCategoryGap="30%" margin={{ left: 0, right: 4, top: 4, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
                   axisLine={false}
                   tickLine={false}
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
                   axisLine={false}
                   tickLine={false}
-                  width={28}
+                  width={24}
                   allowDecimals={false}
                 />
                 <Tooltip
@@ -866,11 +866,11 @@ function AnalyticsTab({
           </div>
 
           {/* Cumulative growth area chart */}
-          <div className="rounded-xl border bg-card p-5">
+          <div className="rounded-xl border bg-card p-3 sm:p-5">
             <p className="mb-1 text-sm font-semibold">Cumulative Growth</p>
-            <p className="mb-5 text-xs text-muted-foreground">Total messages and unique users over time</p>
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={timeline}>
+            <p className="mb-4 text-xs text-muted-foreground">Total messages and unique users over time</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={timeline} margin={{ left: 0, right: 4, top: 4, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradMsg" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={CHART_COLORS.cumMessages} stopOpacity={0.25} />
@@ -884,16 +884,16 @@ function AnalyticsTab({
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
                   axisLine={false}
                   tickLine={false}
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
                   axisLine={false}
                   tickLine={false}
-                  width={36}
+                  width={32}
                   allowDecimals={false}
                 />
                 <Tooltip
@@ -928,24 +928,24 @@ function AnalyticsTab({
 
           {/* Daily searches bar chart — only if there are any */}
           {totalSearches > 0 && (
-            <div className="rounded-xl border bg-card p-5">
+            <div className="rounded-xl border bg-card p-3 sm:p-5">
               <p className="mb-1 text-sm font-semibold">Daily Searches</p>
-              <p className="mb-5 text-xs text-muted-foreground">Video search records created per day</p>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={timeline} barCategoryGap="30%">
+              <p className="mb-4 text-xs text-muted-foreground">Video search records created per day</p>
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={timeline} barCategoryGap="30%" margin={{ left: 0, right: 4, top: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
                     axisLine={false}
                     tickLine={false}
                     interval="preserveStartEnd"
                   />
                   <YAxis
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
                     axisLine={false}
                     tickLine={false}
-                    width={28}
+                    width={24}
                     allowDecimals={false}
                   />
                   <Tooltip
@@ -979,7 +979,7 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card px-6 py-4">
+      <header className="border-b bg-card px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div>
             <h1 className="text-lg font-bold">Spot This — Admin</h1>
@@ -988,29 +988,35 @@ function Dashboard() {
         </div>
 
         {/* Tab bar */}
-        <div className="mx-auto mt-4 flex max-w-6xl gap-1 border-b -mb-4">
+        <div className="mx-auto mt-4 flex max-w-6xl gap-0 border-b -mb-4">
           {(["analytics", "conversations", "searches"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={cn(
-                "px-4 pb-3 text-sm font-medium capitalize transition-colors",
+                "flex-1 px-2 pb-3 text-xs font-medium transition-colors sm:flex-none sm:px-4 sm:text-sm",
                 tab === t
                   ? "border-b-2 border-primary text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
               {t === "analytics" ? (
-                <span className="flex items-center gap-1.5">
-                  <BarChart2 className="size-3.5" /> Analytics
+                <span className="flex items-center justify-center gap-1 sm:gap-1.5">
+                  <BarChart2 className="size-3.5 shrink-0" />
+                  <span className="hidden xs:inline sm:inline">Analytics</span>
+                  <span className="xs:hidden sm:hidden">Stats</span>
                 </span>
               ) : t === "conversations" ? (
-                <span className="flex items-center gap-1.5">
-                  <MessageSquare className="size-3.5" /> Conversations
+                <span className="flex items-center justify-center gap-1 sm:gap-1.5">
+                  <MessageSquare className="size-3.5 shrink-0" />
+                  <span className="hidden xs:inline sm:inline">Conversations</span>
+                  <span className="xs:hidden sm:hidden">Chats</span>
                 </span>
               ) : (
-                <span className="flex items-center gap-1.5">
-                  <Search className="size-3.5" /> Search Records
+                <span className="flex items-center justify-center gap-1 sm:gap-1.5">
+                  <Search className="size-3.5 shrink-0" />
+                  <span className="hidden xs:inline sm:inline">Search Records</span>
+                  <span className="xs:hidden sm:hidden">Searches</span>
                 </span>
               )}
             </button>
@@ -1018,7 +1024,7 @@ function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         {tab === "analytics" ? (
           <AnalyticsTab conversations={conversations} searchRecords={searchRecords} />
         ) : tab === "conversations" ? (
